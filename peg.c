@@ -76,6 +76,13 @@ struct peg_rule_bin {
 };
 typedef struct peg_rule_bin peg_rule_bin;
 
+typedef
+	struct named_peg_rule_ {
+		char * name;
+		PegRule * rule;
+	}
+NamedPegRule;
+
 struct parsed_string_;
 typedef struct parsed_string_ ParsedString;
 struct parsed_string_bin_;
@@ -108,9 +115,11 @@ typedef
 //////// forward referece
 
 //// ctor
+NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 
 //// dtor
 void free_peg_rule(PegRule * pr);
+void free_named_peg_rule(NamedPegRule * npr);
 void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
 
@@ -133,8 +142,10 @@ ParsedString * peg_parse_string_ident   (PegRule const * r, char const * str);
 ParsedString * peg_parse_string_pattern (PegRule const * r, char const * str);
 
 //// printer
-void pprint_peg_rule      (PegRule const * pr);
-void pprint_peg_rule_impl (PegRule const * pr, size_t depth);
+void print_peg_rule           (PegRule const * pr);
+void print_peg_rule_impl      (PegRule const * pr, size_t depth);
+void print_named_peg_rule     (NamedPegRule const * pr);
+void print_named_peg_rule_impl(NamedPegRule const * pr, size_t depth);
 void print_parsed_string     (ParsedString const * ps);
 void print_parsed_string_impl(ParsedString const * ps, size_t depth);
 void print_parsed_string_bin(PEG_KIND kind, ParsedStringBin const * psb, size_t depth);
@@ -146,6 +157,7 @@ void print_parsed_string_bin_impl(char const * open
 
 //// aux
 static bool is_alter_rule (PEG_KIND kind);
+static void print_ntimes(char const * str, int n);
 
 
 //////// function
@@ -202,6 +214,14 @@ peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next) {
 	p->next = next;
 	return p;
 }
+
+NamedPegRule * make_named_peg_rule (char const * name, PegRule * rule) {
+	NamedPegRule * pr = ALLOC(NamedPegRule, 1);
+	pr->name = strdup(name);
+	pr->rule = rule;
+	return pr;
+}
+
 size_t length_peg_rule_bin (peg_rule_bin const * rs) {
 	peg_rule_bin const * iter=rs;
 	size_t len=0;
@@ -244,6 +264,15 @@ void free_peg_rule(PegRule * pr) {
 				return;
 		}
 		free(pr);
+	}
+}
+
+void free_named_peg_rule(NamedPegRule * npr) {
+	if (npr) {
+		free(npr->name);
+		npr->name = NULL;
+		free_peg_rule(npr->rule);
+		free(npr);
 	}
 }
 
@@ -327,11 +356,11 @@ static PegRule const * next_rule(PegRule const * x) {
 	}
 }
 
-void pprint_peg_rule_impl (PegRule const * pr, size_t depth) {
+void print_peg_rule_impl (PegRule const * pr, size_t depth) {
 	if (pr) {
 		switch (pr->kind) {
-			case PEG_NEGATIVE: printf("!"); pprint_peg_rule_impl(pr->body.ref, depth+1); break;
-			case PEG_AND     : printf("&"); pprint_peg_rule_impl(pr->body.ref, depth+1); break;
+			case PEG_NEGATIVE: printf("!"); print_peg_rule_impl(pr->body.ref, depth+1); break;
+			case PEG_AND     : printf("&"); print_peg_rule_impl(pr->body.ref, depth+1); break;
 			case PEG_SEQ:
 			{
 				peg_rule_bin const * iter=pr->body.refs;
@@ -339,7 +368,7 @@ void pprint_peg_rule_impl (PegRule const * pr, size_t depth) {
 				if (1<len)
 					printf("(");
 				while (iter) {
-					pprint_peg_rule_impl(iter->ref, depth+1);
+					print_peg_rule_impl(iter->ref, depth+1);
 					printf(" ");
 					iter = iter->next;
 				}
@@ -347,9 +376,9 @@ void pprint_peg_rule_impl (PegRule const * pr, size_t depth) {
 					printf(")");
 				break;
 			}
-			case PEG_EXISTS: pprint_peg_rule_impl(pr->body.ref, depth+1); printf("?"); break;
-			case PEG_PLUS  : pprint_peg_rule_impl(pr->body.ref, depth+1); printf("+"); break;
-			case PEG_REPEAT: pprint_peg_rule_impl(pr->body.ref, depth+1); printf("*"); break;
+			case PEG_EXISTS: print_peg_rule_impl(pr->body.ref, depth+1); printf("?"); break;
+			case PEG_PLUS  : print_peg_rule_impl(pr->body.ref, depth+1); printf("+"); break;
+			case PEG_REPEAT: print_peg_rule_impl(pr->body.ref, depth+1); printf("*"); break;
 			case PEG_ANY:
 				printf(".(Any)");
 				break;
@@ -363,7 +392,7 @@ void pprint_peg_rule_impl (PegRule const * pr, size_t depth) {
 				if (1<len)
 					printf("(");
 				while (iter) {
-					pprint_peg_rule_impl(iter->ref, depth+1);
+					print_peg_rule_impl(iter->ref, depth+1);
 					printf(" / ");
 					iter = iter->next;
 				}
@@ -380,9 +409,23 @@ void pprint_peg_rule_impl (PegRule const * pr, size_t depth) {
 	}
 }
 
-void pprint_peg_rule (PegRule const * pr) {
-	pprint_peg_rule_impl(pr, 0);
+void print_peg_rule (PegRule const * pr) {
+	print_peg_rule_impl(pr, 0);
 	printf("\n");
+}
+
+void print_named_peg_rule_impl (NamedPegRule const * npr, size_t depth) {
+	print_ntimes("\t", depth);
+		printf("(%s : ", npr->name);
+
+		print_peg_rule_impl(npr->rule, depth+1);
+
+	print_ntimes("\t", depth);
+		printf(") : %s\n", npr->name);
+}
+
+void print_named_peg_rule (NamedPegRule const * npr) {
+	print_named_peg_rule_impl(npr, 0);
 }
 
 static peg_parser const ps[NUM_OF_PEG_TYPE] = {	// jump table for each parsing rule
@@ -509,7 +552,7 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 	if (!ps)
 		return;
 	{
-		pprint_peg_rule_impl(ps->rule, depth);
+		print_peg_rule_impl(ps->rule, depth);
 		print_ntimes("\t", depth+1);
 			printf("==> %s\n", ps->mstr);
 		if (is_alter_rule(ps->rule->kind))
@@ -523,48 +566,54 @@ void print_parsed_string(ParsedString const * ps) {
 }
 
 int main (void) {
-	pprint_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-	pprint_peg_rule(make_peg_rule(PEG_SEQ, NULL));
+	print_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
+	print_peg_rule(make_peg_rule(PEG_SEQ, NULL));
 	free_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
 	free_peg_rule(make_peg_rule(PEG_SEQ, NULL));
 
-	PegRule * add = make_peg_rule(PEG_CHOICE,
+	NamedPegRule * add =
+				make_named_peg_rule("add",
+					make_peg_rule(PEG_CHOICE,
 						cons_peg_rule(make_peg_rule(PEG_SEQ,
 							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"),
 							cons_peg_rule(make_peg_rule(PEG_PATTERN,"+"), 
 							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"), NULL)))),
 						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "mul"), NULL)));
+							make_peg_rule(PEG_IDENT, "mul"), NULL))));
 
-	PegRule * mul = make_peg_rule(PEG_CHOICE,
+	NamedPegRule * mul =
+				make_named_peg_rule("mul",
+					make_peg_rule(PEG_CHOICE,
 						cons_peg_rule(make_peg_rule(PEG_SEQ,
 							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"prim"),
 							cons_peg_rule(make_peg_rule(PEG_PATTERN,"*"),
 							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"), NULL)))),
 						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "prim"), NULL)));
+							make_peg_rule(PEG_IDENT, "prim"), NULL))));
 
-	PegRule * prim= make_peg_rule(PEG_CHOICE,
+	NamedPegRule * prim=
+				make_named_peg_rule("prim",
+					make_peg_rule(PEG_CHOICE,
 						cons_peg_rule(make_peg_rule(PEG_SEQ,
 							cons_peg_rule(make_peg_rule(PEG_PATTERN,"("),
 							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"),
 							cons_peg_rule(make_peg_rule(PEG_PATTERN,")"), NULL)))),
 						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "deci"), NULL)));
+							make_peg_rule(PEG_IDENT, "deci"), NULL))));
 
-	pprint_peg_rule(add);
-	pprint_peg_rule(mul);
-	pprint_peg_rule(prim);
+	print_named_peg_rule(add);
+	print_named_peg_rule(mul);
+	print_named_peg_rule(prim);
 
-	free_peg_rule(add);
-	free_peg_rule(mul);
-	free_peg_rule(prim);
+	free_named_peg_rule(add);
+	free_named_peg_rule(mul);
+	free_named_peg_rule(prim);
 
 	{
 		PegRule * pat=make_peg_rule(PEG_PATTERN, "hellopeg");
 		ParsedString * r=peg_parse_string(pat, "hellopeg");
 
-		pprint_peg_rule(pat);
+		print_peg_rule(pat);
 		print_parsed_string(r);
 
 		free_peg_rule(pat);
