@@ -40,6 +40,8 @@ typedef enum { false=0, true } bool;
 
 #define NUM_OF_PEG_TYPE 11
 
+//// type
+
 typedef
 	enum peg_type {		// king of match
 		PEG_NEGATIVE=0,	// x <- !A
@@ -74,10 +76,88 @@ struct peg_rule_bin {
 };
 typedef struct peg_rule_bin peg_rule_bin;
 
+struct parsed_string_;
+typedef struct parsed_string_ ParsedString;
+struct parsed_string_bin_;
+typedef struct parsed_string_bin_ ParsedStringBin;
+
+struct parsed_string_ {
+	PegRule * rule;
+	char    * mstr; // matched string
+	// result of parsing for each parts of `rule`
+	union {
+		// determined with rule->kind
+		ParsedString    * p;
+		ParsedStringBin * ps;
+	} nest; // rec
+};
+struct parsed_string_bin_ {
+	ParsedString    * ps;
+	ParsedStringBin * next;
+};
+
+typedef struct substring_ {
+	char const * str;
+	size_t len;
+} substring;
+
+typedef
+	ParsedString * (*peg_parser) (PegRule const *, char const *);
+
+
+//////// forward referece
+
+//// ctor
+
+//// dtor
+void free_peg_rule(PegRule * pr);
+void free_parsed_string    (ParsedString    * ps);
+void free_parsed_string_bin(ParsedStringBin * psb);
+
+//// parser for each PEG rue
+//
+// parse the given string with each PEG rule.
+// return NULL if parsing fail.
+// if the parser don't consume a given string, return result with rest of the string.
+//
+ParsedString * peg_parse_string_negative(PegRule const * r, char const * str);
+ParsedString * peg_parse_string_and     (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_exists  (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_plus    (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_repeat  (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_any     (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_class   (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_seq     (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_choice  (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_ident   (PegRule const * r, char const * str);
+ParsedString * peg_parse_string_pattern (PegRule const * r, char const * str);
+
+//// printer
+void pprint_peg_rule      (PegRule const * pr);
+void pprint_peg_rule_impl (PegRule const * pr, size_t depth);
+void print_parsed_string     (ParsedString const * ps);
+void print_parsed_string_impl(ParsedString const * ps, size_t depth);
+void print_parsed_string_bin(PEG_KIND kind, ParsedStringBin const * psb, size_t depth);
+void print_parsed_string_bin_impl(char const * open
+								, ParsedStringBin const * psb
+								, char const * sep
+								, char const * close
+								, size_t depth);
+
+//// aux
+static bool is_alter_rule (PEG_KIND kind);
+
+
+//////// function
+
 static char * strdup(char const * str) {
 	size_t size = strlen(str);
 	char * s = ALLOC(char, size);
 	return strcpy(s, str);
+}
+static char * strndup(char const * str, size_t size) {
+	char * s = ALLOC(char, size);
+	return strncpy(s, str, size);
 }
 
 PegRule * make_peg_rule(PEG_KIND kind
@@ -110,6 +190,10 @@ PegRule * make_peg_rule(PEG_KIND kind
 		return NULL;
 	}
 	return rule;
+}
+
+PegRule * dup_peg_rule (PegRule const * rule) {
+	return make_peg_rule(rule->kind, rule->body.str);
 }
 
 peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next) {
@@ -160,6 +244,62 @@ void free_peg_rule(PegRule * pr) {
 				return;
 		}
 		free(pr);
+	}
+}
+
+substring make_substring(char const * str, size_t len) {
+	substring ss;
+	ss.str = str;
+	ss.len = len;
+	return ss;
+}
+
+char * substring_string(substring ss) {
+	char * s = ALLOC(char, ss.len+1);
+	return strncpy(s, ss.str, ss.len+1);
+}
+
+ParsedString * make_parsed_string (PegRule const * rule, size_t len, char const * str, void * nest) {
+	ParsedString * r = ALLOC(ParsedString, 1);
+	r->rule = dup_peg_rule(rule);
+	if (r->rule->kind==PEG_SEQ || r->rule->kind==PEG_CHOICE)
+		r->nest.p = nest;
+	else
+		r->nest.ps = nest;
+	r->mstr = strndup(str, len);
+	return r;
+}
+ParsedStringBin * make_parsed_string_bin (ParsedString * ps, ParsedStringBin * next) {
+	ParsedStringBin * psb = ALLOC(ParsedStringBin, 1);
+	psb->ps   = ps;
+	psb->next = next;
+	return psb;
+}
+void free_parsed_string_bin(ParsedStringBin * psb) {
+	if (psb) {
+		free_parsed_string_bin(psb->next);
+		psb->next = NULL;
+		free_parsed_string(psb->ps);
+		psb->ps = NULL;
+		free(psb);
+	}
+}
+void free_parsed_string(ParsedString * ps) {
+	if (ps) {
+		if (ps->rule) {
+			if (is_alter_rule(ps->rule->kind)) {
+				free_parsed_string_bin(ps->nest.ps);
+				ps->nest.ps = NULL;
+			} else {
+				free_parsed_string(ps->nest.p);
+				ps->nest.p = NULL;
+			}
+		}
+		free(ps->mstr);
+		ps->mstr = NULL;
+		free_peg_rule(ps->rule);
+		ps->rule = NULL;
+		free(ps);
 	}
 }
 
@@ -245,6 +385,143 @@ void pprint_peg_rule (PegRule const * pr) {
 	printf("\n");
 }
 
+static peg_parser const ps[NUM_OF_PEG_TYPE] = {	// jump table for each parsing rule
+	peg_parse_string_negative,
+	peg_parse_string_and,
+	peg_parse_string_seq,
+	peg_parse_string_exists,
+	peg_parse_string_plus,
+	peg_parse_string_repeat,
+	peg_parse_string_any,
+	peg_parse_string_class,
+	peg_parse_string_choice,
+	peg_parse_string_ident,
+	peg_parse_string_pattern
+};
+
+ParsedString * peg_parse_string_negative(PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_and     (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_exists  (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_plus    (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_repeat  (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_any     (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_class   (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_seq     (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_choice  (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+ParsedString * peg_parse_string_ident   (PegRule const * r, char const * str) {
+	NOTIMPL;
+	return NULL;
+}
+
+ParsedString * peg_parse_string_pattern (PegRule const * r, char const * str) {
+	ASSERT(r && r->kind==PEG_PATTERN, "require kind 'pattern'\n"); {
+	size_t const len=strlen(r->body.str);
+	if (!strncmp(r->body.str, str, len))
+		return make_parsed_string(r, len, str, NULL);
+	else
+		return NULL;
+} }
+
+// parse input string with `rule`
+ParsedString * peg_parse_string(PegRule const * r, char const * str) {
+	return ps[r->kind](r, str);
+}
+
+static void print_ntimes(char const * str, int n) {
+	int i;
+	for (i=0; i<n; ++i)
+		printf("%s", str);
+}
+
+static bool is_alter_rule (PEG_KIND kind) {
+	switch (kind) {
+		case PEG_IDENT:
+		case PEG_PATTERN:
+		case PEG_NEGATIVE:
+		case PEG_AND:
+		case PEG_EXISTS:
+		case PEG_PLUS:
+		case PEG_REPEAT:
+		case PEG_ANY:
+		case PEG_CLASS:
+			return false;
+		case PEG_SEQ:
+		case PEG_CHOICE:
+			return true;
+		default:
+			WARN("unkown peg rule is specified\n");
+			return false;
+	}
+}
+
+void print_parsed_string_bin_impl(char const * open
+								, ParsedStringBin const * psb
+								, char const * sep
+								, char const * close
+								, size_t depth) 
+{
+	ParsedStringBin const * iter=psb;
+	printf("%s", open);
+	while (iter) {
+		print_parsed_string_impl(psb->ps, depth);
+		printf("%s", sep);
+		iter = iter->next;
+	}
+	printf("%s", close);
+}
+void print_parsed_string_bin(PEG_KIND kind, ParsedStringBin const * psb, size_t depth) {
+	if (kind==PEG_SEQ)
+		print_parsed_string_bin_impl("", psb, " / ", "", depth+1);
+	else if (kind==PEG_CHOICE)
+		print_parsed_string_bin_impl("", psb, " "  , "", depth+1);
+	else
+		ASSERT(false, "invalid kind is specified\n");
+}
+
+void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
+	if (!ps)
+		return;
+	{
+		pprint_peg_rule_impl(ps->rule, depth);
+		print_ntimes("\t", depth+1);
+			printf("==> %s\n", ps->mstr);
+		if (is_alter_rule(ps->rule->kind))
+			print_parsed_string_bin(ps->rule->kind, ps->nest.ps, depth+1);
+		else
+			print_parsed_string_impl(ps->nest.p, depth+1);
+	}
+}
+void print_parsed_string(ParsedString const * ps) {
+	return print_parsed_string_impl(ps, 0);
+}
+
 int main (void) {
 	pprint_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
 	pprint_peg_rule(make_peg_rule(PEG_SEQ, NULL));
@@ -278,6 +555,23 @@ int main (void) {
 	pprint_peg_rule(add);
 	pprint_peg_rule(mul);
 	pprint_peg_rule(prim);
+
+	free_peg_rule(add);
+	free_peg_rule(mul);
+	free_peg_rule(prim);
+
+	{
+		PegRule * pat=make_peg_rule(PEG_PATTERN, "hellopeg");
+		ParsedString * r=peg_parse_string(pat, "hellopeg");
+
+		pprint_peg_rule(pat);
+		print_parsed_string(r);
+
+		free_peg_rule(pat);
+		free_parsed_string(r);
+	}
+
+	printf("end\n");
 	return 0;
 }
 
