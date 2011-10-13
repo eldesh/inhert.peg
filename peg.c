@@ -89,6 +89,7 @@ struct parsed_string_bin_;
 typedef struct parsed_string_bin_ ParsedStringBin;
 
 struct parsed_string_ {
+	char    * ident; // Maybe name(of rule)
 	PegRule * rule;
 	char    * mstr; // matched string
 	// result of parsing for each parts of `rule`
@@ -115,6 +116,7 @@ typedef
 //////// forward referece
 
 //// ctor
+ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, void * nest);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 
 //// dtor
@@ -288,10 +290,11 @@ char * substring_string(substring ss) {
 	return strncpy(s, ss.str, ss.len+1);
 }
 
-ParsedString * make_parsed_string (PegRule const * rule, size_t len, char const * str, void * nest) {
+ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, void * nest) {
 	ParsedString * r = ALLOC(ParsedString, 1);
+	r->ident = ident ? strdup(ident) : NULL;
 	r->rule = dup_peg_rule(rule);
-	if (r->rule->kind==PEG_SEQ || r->rule->kind==PEG_CHOICE)
+	if (is_alter_rule(r->rule->kind))
 		r->nest.p = nest;
 	else
 		r->nest.ps = nest;
@@ -315,6 +318,8 @@ void free_parsed_string_bin(ParsedStringBin * psb) {
 }
 void free_parsed_string(ParsedString * ps) {
 	if (ps) {
+		free(ps->ident);
+		ps->ident = NULL;
 		if (ps->rule) {
 			if (is_alter_rule(ps->rule->kind)) {
 				free_parsed_string_bin(ps->nest.ps);
@@ -487,7 +492,7 @@ ParsedString * peg_parse_string_pattern (PegRule const * r, char const * str) {
 	ASSERT(r && r->kind==PEG_PATTERN, "require kind 'pattern'\n"); {
 	size_t const len=strlen(r->body.str);
 	if (!strncmp(r->body.str, str, len))
-		return make_parsed_string(r, len, str, NULL);
+		return make_parsed_string(NULL, r, len, str, NULL);
 	else
 		return NULL;
 } }
@@ -552,13 +557,21 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 	if (!ps)
 		return;
 	{
-		print_peg_rule_impl(ps->rule, depth);
-		print_ntimes("\t", depth+1);
-			printf("==> %s\n", ps->mstr);
-		if (is_alter_rule(ps->rule->kind))
-			print_parsed_string_bin(ps->rule->kind, ps->nest.ps, depth+1);
-		else
-			print_parsed_string_impl(ps->nest.p, depth+1);
+		print_ntimes("\t", depth);
+			printf("(%s : ", ps->ident ? ps->ident : "");
+
+			print_peg_rule_impl(ps->rule, depth);
+
+			print_ntimes("\t", depth+1);
+				printf("==> %s\n", ps->mstr);
+
+			if (is_alter_rule(ps->rule->kind))
+				print_parsed_string_bin(ps->rule->kind, ps->nest.ps, depth+1);
+			else
+				print_parsed_string_impl(ps->nest.p, depth+1);
+
+		print_ntimes("\t", depth);
+			printf(") : %s\n", ps->ident ? ps->ident : "");
 	}
 }
 void print_parsed_string(ParsedString const * ps) {
