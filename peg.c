@@ -39,7 +39,7 @@ void * MALLOC_LOG(char const * file, int line, char const * func, size_t byte) {
 }
 void FREE_LOG(char const * file, int line, char const * func, void * p) {
 	fprintf(stderr, "%10s:%5d [%-20s] > free (%p)\n", file, line, func, p);
-	(free)(p);
+	(free)(p); /* avoid replacing macro(free) recursively */
 }
 #endif
 
@@ -822,7 +822,7 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 	}
 }
 void print_parsed_string(ParsedString const * ps) {
-	return print_parsed_string_impl(ps, 0);
+	print_parsed_string_impl(ps, 0);
 }
 
 char * char_str(char c) {
@@ -905,10 +905,11 @@ void sample (void) {
 	}
 
 	{
-		NamedPegRule * pat=make_named_peg_rule("hello", make_peg_rule(PEG_PATTERN, "hellopeg"));
+		NamedPegRule * pat  = make_named_peg_rule("hello", make_peg_rule(PEG_PATTERN, "HelloPEG"));
 		PegParser * pat_peg = make_peg_parser();
+		ParsedString * r    = NULL;
 		push_back_peg_parser(pat_peg, pat);
-		ParsedString * r=peg_parse_string(pat_peg, "hellopeg");
+		r = peg_parse_string(pat_peg, "HelloPEG");
 
 		print_named_peg_rule(pat);
 		print_parsed_string(r);
@@ -1110,7 +1111,6 @@ void sample (void) {
 		free_peg_parser(fizzbazz_parser);
 	}
 	printf("end\n");
-	return 0;
 }
 
 int main (void) {
