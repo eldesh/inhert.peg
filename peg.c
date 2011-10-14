@@ -16,9 +16,13 @@
 #define PP_STRINGIZE(s) PP_STRINGIZE_I(s)
 #define PP_STRINGIZE_I(s) #s
 
-#define WARN(...)    WARN_I(__VA_ARGS__)
-#define WARN_I(...) (fprintf(stderr, "%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
-		             fprintf(stderr, __VA_ARGS__))
+#if __STDC_VERSION__==199901L
+#  define WARN(...)    WARN_I(__VA_ARGS__)
+#  define WARN_I(...)  err_printf(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#else /* not support variadic macro */
+#  define WARN         err_printf_raw("%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
+		               err_printf_raw
+#endif
 
 #define NOTIMPL   WARN("not implement yet... \n")
 
@@ -236,6 +240,22 @@ char * strndup(char const * str, size_t size) {
 	s[size] = '\0';
 	return s;
 }
+
+void err_printf_raw(char const * format, ...) {
+	va_list ap;
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+}
+void err_printf(char const * file, int line, char const * func, char const * format, ...)
+{
+	va_list ap;
+	fprintf(stderr, "%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__);
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+}
+
 
 PegRule * make_peg_rule(PEG_KIND kind
 						, void * body) /* ident / peg_rule / peg_rule_bin */
