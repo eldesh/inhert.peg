@@ -22,8 +22,27 @@
 
 #define NOTIMPL   WARN("not implement yet... \n")
 
+//#define LOG_HEAP
 #define ALLOC(ty, n) ALLOC_I(ty, n)
-#define ALLOC_I(ty, n) ((ty*)malloc(sizeof(ty) * (n)))
+#if defined LOG_HEAP
+#  define ALLOC_I(ty, n) ((ty*)MALLOC_LOG(__FILE__, __LINE__, __func__, sizeof(ty) * (n)))
+#  define free(p) FREE_LOG(__FILE__, __LINE__, __func__, p)
+#else
+#  define ALLOC_I(ty, n) ((ty*)malloc(sizeof(ty) * (n)))
+#endif
+
+#if defined LOG_HEAP
+void * MALLOC_LOG(char const * file, int line, char const * func, size_t byte) {
+	void * p = malloc(byte);
+	fprintf(stderr, "%10s:%5d [%-20s] > alloc (%5d) (%p)\n", file, line, func, byte, p);
+	return p;
+}
+void FREE_LOG(char const * file, int line, char const * func, void * p) {
+	fprintf(stderr, "%10s:%5d [%-20s] > free (%p)\n", file, line, func, p);
+	(free)(p);
+}
+#endif
+
 
 #define ASSERT(expr, str) ASSERT_I(expr, str)
 #define ASSERT_I(expr, str)                  \
