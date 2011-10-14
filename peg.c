@@ -242,8 +242,10 @@ PegRule * make_peg_rule(PEG_KIND kind
 	case PEG_EXISTS  :
 	case PEG_PLUS    :
 	case PEG_REPEAT  :
-	case PEG_ANY     :
 		rule->body.ref = (PegRule*)body;
+		break;
+	case PEG_ANY     :
+		rule->body.ref = NULL;
 		break;
 	case PEG_CHOICE  :
 	case PEG_SEQ     :
@@ -283,8 +285,11 @@ PegRule * dup_peg_rule (PegRule const * rule) {
 	case PEG_EXISTS  :
 	case PEG_PLUS    :
 	case PEG_REPEAT  :
-	case PEG_ANY     :
 		newrule->body.ref = dup_peg_rule(rule->body.ref);
+		break;
+	case PEG_ANY:
+		ASSERT(rule->body.ref==NULL, "any has no alternatives");
+		newrule->body.ref = NULL;
 		break;
 	case PEG_CHOICE  :
 	case PEG_SEQ     :
@@ -653,8 +658,10 @@ ParsedString * peg_parse_string_repeat(PegParser const * rs, PegRule const * r, 
 		return make_parsed_string(NULL, r, 0, str, NULL);
 }
 ParsedString * peg_parse_string_any(PegParser const * rs, PegRule const * r, char const * str) {
-	NOTIMPL;
-	return NULL;
+	if (strlen(str))
+		return make_parsed_string(NULL, r, 1, str, NULL);
+	else
+		return NULL;
 }
 ParsedString * peg_parse_string_class(PegParser const * rs, PegRule const * r, char const * str) {
 	NOTIMPL;
@@ -688,7 +695,7 @@ ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, 
 	free_parsed_string(ps);
 	return NULL;
 }
-ParsedString * peg_parse_string_ident   (PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str) {
 	NOTIMPL;
 	return NULL;
 }
@@ -955,9 +962,7 @@ int main (void) {
 																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "c"), NULL)))));
 		PegParser * abcseq_parser = make_peg_parser();
 		ParsedString * r = NULL;
-
 		print_named_peg_rule(abcseq);
-
 		push_back_peg_parser(abcseq_parser, abcseq);
 
 		ASSERT(peg_parse_string(abcseq_parser, ""   )==NULL, "don't match!\n");
@@ -979,6 +984,39 @@ int main (void) {
 		free_parsed_string(r);
 
 		free_peg_parser(abcseq_parser);
+	}
+
+	{
+		NamedPegRule * any = make_named_peg_rule("any", make_peg_rule(PEG_ANY, NULL));
+		PegParser * any_parser = make_peg_parser();
+		ParsedString * r = NULL;
+
+		print_named_peg_rule(any);
+		push_back_peg_parser(any_parser, any);
+
+		ASSERT(peg_parse_string(any_parser, ""  )==NULL, "don't match!\n");
+
+		r = peg_parse_string(any_parser, "a");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(any_parser, "b");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(any_parser, " ");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(any_parser, ".");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(any_parser, "()");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		free_peg_parser(any_parser);
 	}
 	printf("end\n");
 	return 0;
