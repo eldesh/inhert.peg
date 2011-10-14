@@ -108,18 +108,18 @@ struct parsed_string_bin_;
 typedef struct parsed_string_bin_ ParsedStringBin;
 
 /***
+ * ::parsed_string_
+ * ::parsed_string_bin_
  *
- * +----+    +----+    +----+    +----+ 
- * | R+ | -> | R  | -> | R  | -> | R  | 
- * +----+    +----+    +----+    +----+ 
- *
- * +----+
- * | R+ |
- * +-+--+
- *   |    +====+    +====+    +====+    +====+  
- *   +--> | R  | -> | R  | -> | R  | -> | R  |  
- *        +====+    +====+    +====+    +====+  
- *
+ * <parsed_string_>
+ * +------+
+ * | Rule +--------------- (mstr)
+ * +-+----+       +----------+-----------------------+
+ *   |            |                                  |
+ *   |            +====+    +====+    +====+    +====+  
+ *   +- (nest) -> | R  | -> | R  | -> | R  | -> | R  |  
+ *                +====+    +====+    +====+    +====+
+ *              [sub-rule]                 <parsed_string_bin_>
  * ***/
 
 struct parsed_string_ {
@@ -150,9 +150,14 @@ typedef
 	ParsedString * (*peg_parser) (PegParser const *, PegRule const *, char const *);
 
 
+// synonym
+peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rule_bin;
+
 //////// forward referece
 
 //// ctor
+PegRule      * make_peg_rule(PEG_KIND kind, void * body);
+peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, ParsedStringBin * nest);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
@@ -201,10 +206,12 @@ ParsedString * peg_parse_string     (PegParser const * pegs, char const * str);
 ParsedString * peg_parse_string_impl(PegParser const * rs, PegRule const * r, char const * str);
 
 //// aux
+bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
+size_t length_peg_rule_bin (peg_rule_bin const * rs);
 static bool is_alter_rule (PEG_KIND kind);
 static void print_ntimes(char const * str, int n);
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
-PegRule * dup_peg_rule (PegRule const * rule);
+PegRule      * dup_peg_rule     (PegRule      const * rule);
 peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
 
 //////// function
@@ -338,8 +345,6 @@ size_t length_peg_rule_bin (peg_rule_bin const * rs) {
 	}
 	return len;
 }
-
-peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rule_bin;
 
 void free_peg_rule(PegRule * pr) {
 	if (pr) {
