@@ -72,7 +72,7 @@ typedef
 		PEG_ANY,        // x <- .
 		PEG_CLASS,      // x <- [a-z]
 		PEG_CHOICE,		// x <- A / B / C
-		PEG_IDENT,      // Expr, Term, Factor(nonterminal symbol)
+		PEG_IDENT,      // e.g. Expr, Term, Factor(nonterminal symbol)
 		PEG_PATTERN     // e.g. "foobar", "template", "extends"(terminal symbol)
 	}
 PEG_KIND;
@@ -212,6 +212,11 @@ bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
 PegRule      * dup_peg_rule     (PegRule      const * rule);
 peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
 NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident);
+
+//// basis parsers provided by default
+PegRule * peg_alphabet  (void);
+PegRule * peg_digit     (void);
+PegRule * peg_alphadigit(void);
 
 
 /// synonym
@@ -820,52 +825,84 @@ void print_parsed_string(ParsedString const * ps) {
 	return print_parsed_string_impl(ps, 0);
 }
 
-int main (void) {
-	print_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-	print_peg_rule(make_peg_rule(PEG_SEQ, NULL));
-	free_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-	free_peg_rule(make_peg_rule(PEG_SEQ, NULL));
+char * char_str(char c) {
+	char * cc = ALLOC(char, 2);
+	cc[0] = c;
+	cc[1] = '\0';
+	return cc;
+}
+peg_rule_bin * cons_chars_as_peg_rule (char const * str) {
+	if (*str=='\0')
+		return NULL;
+	else
+		return cons_peg_rule(make_peg_rule(PEG_PATTERN, char_str(*str)), cons_chars_as_peg_rule(str+1));
+}
 
-	NamedPegRule * add =
-				make_named_peg_rule("add",
-					make_peg_rule(PEG_CHOICE,
-						cons_peg_rule(make_peg_rule(PEG_SEQ,
-							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"),
-							cons_peg_rule(make_peg_rule(PEG_PATTERN,"+"), 
-							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"), NULL)))),
-						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "mul"), NULL))));
+PegRule * peg_alphabet  (void) {
+	static char const * alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(alpha));
+}
+PegRule * peg_digit (void) {
+	static char const * digit = "0123456789";
+	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(digit));
+}
+PegRule * peg_alphadigit (void) {
+	return make_peg_rule(PEG_CHOICE,
+			cons_peg_rule(peg_alphabet(),
+			cons_peg_rule(peg_digit   (), NULL)));
+}
 
-	NamedPegRule * mul =
-				make_named_peg_rule("mul",
-					make_peg_rule(PEG_CHOICE,
-						cons_peg_rule(make_peg_rule(PEG_SEQ,
-							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"prim"),
-							cons_peg_rule(make_peg_rule(PEG_PATTERN,"*"),
-							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"), NULL)))),
-						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "prim"), NULL))));
 
-	NamedPegRule * prim=
-				make_named_peg_rule("prim",
-					make_peg_rule(PEG_CHOICE,
-						cons_peg_rule(make_peg_rule(PEG_SEQ,
-							cons_peg_rule(make_peg_rule(PEG_PATTERN,"("),
-							cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"),
-							cons_peg_rule(make_peg_rule(PEG_PATTERN,")"), NULL)))),
-						cons_peg_rule(
-							make_peg_rule(PEG_IDENT, "deci"), NULL))));
-	PegParser * peg = make_peg_parser();
+void sample (void) {
+	{
+		print_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
+		print_peg_rule(make_peg_rule(PEG_SEQ, NULL));
+		free_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
+		free_peg_rule(make_peg_rule(PEG_SEQ, NULL));
+	}
 
-	print_named_peg_rule(add);
-	print_named_peg_rule(mul);
-	print_named_peg_rule(prim);
+	{
+		NamedPegRule * add =
+					make_named_peg_rule("add",
+						make_peg_rule(PEG_CHOICE,
+							cons_peg_rule(make_peg_rule(PEG_SEQ,
+								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"),
+								cons_peg_rule(make_peg_rule(PEG_PATTERN,"+"), 
+								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"), NULL)))),
+							cons_peg_rule(
+								make_peg_rule(PEG_IDENT, "mul"), NULL))));
 
-	push_back_peg_parser(peg, add);
-	push_back_peg_parser(peg, mul);
-	push_back_peg_parser(peg, prim);
+		NamedPegRule * mul =
+					make_named_peg_rule("mul",
+						make_peg_rule(PEG_CHOICE,
+							cons_peg_rule(make_peg_rule(PEG_SEQ,
+								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"prim"),
+								cons_peg_rule(make_peg_rule(PEG_PATTERN,"*"),
+								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"), NULL)))),
+							cons_peg_rule(
+								make_peg_rule(PEG_IDENT, "prim"), NULL))));
 
-	free_peg_parser(peg);
+		NamedPegRule * prim=
+					make_named_peg_rule("prim",
+						make_peg_rule(PEG_CHOICE,
+							cons_peg_rule(make_peg_rule(PEG_SEQ,
+								cons_peg_rule(make_peg_rule(PEG_PATTERN,"("),
+								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"),
+								cons_peg_rule(make_peg_rule(PEG_PATTERN,")"), NULL)))),
+							cons_peg_rule(
+								make_peg_rule(PEG_IDENT, "deci"), NULL))));
+		PegParser * peg = make_peg_parser();
+
+		print_named_peg_rule(add);
+		print_named_peg_rule(mul);
+		print_named_peg_rule(prim);
+
+		push_back_peg_parser(peg, add);
+		push_back_peg_parser(peg, mul);
+		push_back_peg_parser(peg, prim);
+
+		free_peg_parser(peg);
+	}
 
 	{
 		NamedPegRule * pat=make_named_peg_rule("hello", make_peg_rule(PEG_PATTERN, "hellopeg"));
@@ -1073,6 +1110,11 @@ int main (void) {
 		free_peg_parser(fizzbazz_parser);
 	}
 	printf("end\n");
+	return 0;
+}
+
+int main (void) {
+	sample();
 	return 0;
 }
 
