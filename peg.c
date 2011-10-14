@@ -1,10 +1,14 @@
-/****
+/**** *****************************************************************************
  *
  * INHERT.PEG Generator Library
  *
  * 	 PEG: Parsing Expression Grammer
- *                                                                             ****/
+ ***************************************************************************** ****/
 
+/**
+ * compile :
+ * 	> gcc -g -o peg -Wall peg.c
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
