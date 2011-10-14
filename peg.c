@@ -62,7 +62,7 @@ typedef enum { false=0, true } bool;
 //// type
 
 typedef
-	enum peg_type {		// king of match
+	enum peg_type {		// kind of match
 		PEG_NEGATIVE=0,	// x <- !A
 		PEG_AND,        // x <- &A
 		PEG_SEQ,        // x <- A B
@@ -82,11 +82,11 @@ struct peg_rule_bin;
 typedef struct peg_rule PegRule;
 
 struct peg_rule {
-	PEG_KIND kind;
+	PEG_KIND kind; // type tag specify type of body(:union)
 	union {
-		char * str;
-		struct peg_rule     * ref;
-		struct peg_rule_bin * refs;
+		char * str;                 // specified with string
+		struct peg_rule     * ref;  // have an alternative
+		struct peg_rule_bin * refs; // have more than one alternatives
 	} body;
 };
 struct peg_rule_bin {
@@ -141,6 +141,7 @@ typedef
 	}
 PegParser;
 
+// weak reference to a string
 typedef struct substring_ {
 	char const * str;
 	size_t len;
@@ -149,9 +150,6 @@ typedef struct substring_ {
 typedef
 	ParsedString * (*peg_parser) (PegParser const *, PegRule const *, char const *);
 
-
-// synonym
-peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rule_bin;
 
 //////// forward referece
 
@@ -213,6 +211,11 @@ static void print_ntimes(char const * str, int n);
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
 PegRule      * dup_peg_rule     (PegRule      const * rule);
 peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
+
+
+/// synonym
+peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rule_bin;
+
 
 //////// function
 
@@ -658,8 +661,19 @@ ParsedString * peg_parse_string_class(PegParser const * rs, PegRule const * r, c
 	return NULL;
 }
 ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, char const * str) {
-	NOTIMPL;
-	return NULL;
+	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
+	peg_rule_bin const * iter = r->body.refs;
+	size_t sumlen = 0;
+	for (; iter; iter=iter->next) {
+		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str+sumlen);
+		if (!p) {
+			free_parsed_string(ps);
+			return NULL;
+		}
+		sumlen += strlen(p->mstr);
+		push_back_parsed_string(ps, p);
+	}
+	return ps;
 }
 ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, char const * str) {
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
@@ -932,6 +946,39 @@ int main (void) {
 		ASSERT(peg_parse_string(abalter_parser, "c")==NULL, "don't match!\n");
 
 		free_peg_parser(abalter_parser);
+	}
+
+	{
+		NamedPegRule * abcseq = make_named_peg_rule("abcseq", make_peg_rule(PEG_SEQ,
+																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "a"),
+																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "b"),
+																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "c"), NULL)))));
+		PegParser * abcseq_parser = make_peg_parser();
+		ParsedString * r = NULL;
+
+		print_named_peg_rule(abcseq);
+
+		push_back_peg_parser(abcseq_parser, abcseq);
+
+		ASSERT(peg_parse_string(abcseq_parser, ""   )==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(abcseq_parser, "a"  )==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(abcseq_parser, "ab" )==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(abcseq_parser, "abb")==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(abcseq_parser, "bc" )==NULL, "don't match!\n");
+
+		r = peg_parse_string(abcseq_parser, "abc");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(abcseq_parser, "abcd");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(abcseq_parser, "abcabcabcabc");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		free_peg_parser(abcseq_parser);
 	}
 	printf("end\n");
 	return 0;
