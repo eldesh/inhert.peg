@@ -167,7 +167,7 @@ void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
 void free_peg_parser(PegParser * p);
 
-//// parser for each PEG rue
+//// parser for each PEG rule
 //
 // parse the given string with each PEG rule.
 // return NULL if parsing fail.
@@ -211,6 +211,7 @@ static void print_ntimes(char const * str, int n);
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
 PegRule      * dup_peg_rule     (PegRule      const * rule);
 peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
+NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident);
 
 
 /// synonym
@@ -695,9 +696,19 @@ ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, 
 	free_parsed_string(ps);
 	return NULL;
 }
-ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str) {
-	NOTIMPL;
+
+NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident) {
+	size_t i;
+	for (i=0; i<rs->size; ++i) {
+		if (!strcmp(ident, rs->nps[i]->name))
+			return rs->nps[i];
+	}
 	return NULL;
+}
+ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str) {
+	NamedPegRule const * r_ = find_named_peg_rule(rs, r->body.str);
+	ASSERT(r_!=NULL, "It is certainly found.\n");
+	return peg_parse_string_impl(rs, r_->rule, str);
 }
 
 ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r, char const * str) {
@@ -1017,6 +1028,49 @@ int main (void) {
 		free_parsed_string(r);
 
 		free_peg_parser(any_parser);
+	}
+
+	{
+		NamedPegRule * fizz     = make_named_peg_rule("fizz", make_peg_rule(PEG_PATTERN, "fizz"));
+		NamedPegRule * bazz     = make_named_peg_rule("bazz", make_peg_rule(PEG_PATTERN, "bazz"));
+		NamedPegRule * fizzbazz = make_named_peg_rule("fizzbazz",
+															make_peg_rule(PEG_SEQ,
+																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "1"),
+																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "2"),
+																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "3"),
+																make_peg_rule_bin(make_peg_rule(PEG_IDENT, "fizz"),
+																make_peg_rule_bin(make_peg_rule(PEG_IDENT, "bazz"), NULL)))))));
+		PegParser * fizzbazz_parser = make_peg_parser();
+		ParsedString * r = NULL;
+
+		print_named_peg_rule(fizz);
+		print_named_peg_rule(bazz);
+		print_named_peg_rule(fizzbazz);
+
+		push_back_peg_parser(fizzbazz_parser, fizzbazz);
+		push_back_peg_parser(fizzbazz_parser, bazz);
+		push_back_peg_parser(fizzbazz_parser, fizz);
+
+		ASSERT(peg_parse_string(fizzbazz_parser, "")            ==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(fizzbazz_parser, "1")           ==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(fizzbazz_parser, "12")          ==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(fizzbazz_parser, "123")         ==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(fizzbazz_parser, "123fizzbaz")  ==NULL, "don't match!\n");
+		ASSERT(peg_parse_string(fizzbazz_parser, " 123fizzbazz")==NULL, "don't match!\n");
+
+		r = peg_parse_string(fizzbazz_parser, "123fizzbazz");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(fizzbazz_parser, " 123fizzbazz");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(fizzbazz_parser, "123FIZZBAZZ");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		free_peg_parser(fizzbazz_parser);
 	}
 	printf("end\n");
 	return 0;
