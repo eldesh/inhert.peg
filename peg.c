@@ -24,8 +24,8 @@
 #  define WARN(...)    WARN_I(__VA_ARGS__)
 #  define WARN_I(...)  err_printf(__FILE__, __LINE__, __func__, __VA_ARGS__)
 #else /* not support variadic macro */
-#  define WARN         err_printf_raw("%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
-		               err_printf_raw
+#  define WARN         err_printf_row("%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
+		               err_printf_row
 #endif
 
 #define NOTIMPL   WARN("not implement yet... \n")
@@ -142,6 +142,56 @@ struct parsed_string_bin_ {
 	ParsedStringBin * next;
 };
 
+/****
+ *
+ * type concept
+ *   E = Parsed (| LR)
+ *   RowE = [# size, E*]
+ *   MaybeRowE = RowE*
+ *   Table = ([# NamedPegRule], [# MaybeRowE])
+ *
+ * e.g.
+ *   +-------+----+----+----+----+----+----+----+----+
+ *   |   /   |  3 |  * |  ( |  2 |  + |  4 |  ) | \0 |
+ *   +-------+----+----+----+----+----+----+----+----+
+ *   | add   |    |    |    |    |    |    |    |    |
+ *   +-------+----+----+----+----+----+----+----+----+
+ *   | mul   |    |    |    |    |    |    |    |    |
+ *   +-------+----+----+----+----+----+----+----+----+
+ *   | prim  |    |    |    |    |    |    |    |    |
+ *   +-------+----+----+----+----+----+----+----+----+
+ *   | deci  |    |    |    |    |    |    |    |    |
+ *   +-------+----+----+----+----+----+----+----+----+
+ *
+ * ****/
+
+// cache entry for result of parsing
+typedef
+	struct cache_elem_ {
+		ParsedString * result_tree; // Maybe ParseResult
+	}
+cache_elem;
+
+// row of cache table
+typedef
+	struct row_cache_table_ {
+		size_t size;
+		cache_elem ** es;
+	}
+row_cache_table;
+
+/**
+ * row_cache *  = Maybe row_cache
+ * row_cache ** = [# Maybe row_cache]
+ */
+typedef
+	struct cache_table_ {
+		size_t size;        // == strlen(str) == count(rs)
+		row_cache_table ** rs;
+		char const * str;
+	}
+PegCacheTable;
+
 typedef
 	struct peg_parser_ {
 		size_t size;
@@ -156,7 +206,7 @@ typedef struct substring_ {
 } substring;
 
 typedef
-	ParsedString * (*peg_parser) (PegParser const *, PegRule const *, char const *);
+	ParsedString * (*peg_parser) (PegParser const *, PegRule const *, char const *, PegCacheTable *);
 
 
 //////// forward referece
@@ -175,23 +225,27 @@ void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
 void free_peg_parser(PegParser * p);
 
+void free_peg_cache_table(PegCacheTable * table);
+	void free_row_cache_table(row_cache_table * rs);
+	void free_cache_elem(cache_elem * e);
+
 //// parser for each PEG rule
 //
 // parse the given string with each PEG rule.
 // return NULL if parsing fail.
 // if the parser don't consume a given string, return result with rest of the string.
 //
-ParsedString * peg_parse_string_negative(PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_and     (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_exists  (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_plus    (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_repeat  (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_any     (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_class   (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_seq     (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_choice  (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_ident   (PegParser const * rs, PegRule const * r, char const * str);
-ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r, char const * str);
+ParsedString * peg_parse_string_negative(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_and     (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_exists  (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_plus    (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_repeat  (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_any     (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_class   (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_seq     (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_choice  (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_ident   (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
 
 //// printer
 void print_peg_rule           (PegRule const * pr);
@@ -209,16 +263,22 @@ void print_parsed_string_bin_impl(char const * open
 
 //// parse
 ParsedString * peg_parse_string     (PegParser const * pegs, char const * str);
-ParsedString * peg_parse_string_impl(PegParser const * rs, PegRule const * r, char const * str);
+ParsedString * peg_parse_string_impl(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table);
+
+//// duplcator
+PegRule      * dup_peg_rule     (PegRule      const * rule);
+peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
+ParsedString * dup_parsed_string(ParsedString const * ps);
+ParsedStringBin * dup_parsed_string_bin(ParsedStringBin const * ps);
 
 //// aux
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
+// add a rule to set of pasers as a start parsing rule
+bool push_back_peg_parser_as_root(PegParser * p, NamedPegRule * npr);
 size_t length_peg_rule_bin (peg_rule_bin const * rs);
 static bool is_alter_rule (PEG_KIND kind);
 static void print_ntimes(char const * str, int n);
-bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
-PegRule      * dup_peg_rule     (PegRule      const * rule);
-peg_rule_bin * dup_peg_rule_bin (peg_rule_bin const * rs);
+
 NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident);
 
 //// basis parsers provided by default
@@ -245,7 +305,7 @@ char * strndup(char const * str, size_t size) {
 	return s;
 }
 
-void err_printf_raw(char const * format, ...) {
+void err_printf_row(char const * format, ...) {
 	va_list ap;
 	va_start(ap, format);
 	vfprintf(stderr, format, ap);
@@ -355,9 +415,14 @@ NamedPegRule * make_named_peg_rule (char const * name, PegRule * rule) {
 
 PegParser * make_peg_parser(void) {
 	PegParser * p = ALLOC(PegParser, 1);
-	p->size = 0;
-	p->nps  = NULL;
+	p->size  = 0;
+	p->nps   = NULL;
 	return p;
+}
+
+bool push_back_peg_parser_as_root(PegParser * p, NamedPegRule * npr) {
+	NOTIMPL;
+	return false;
 }
 
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr) {
@@ -600,16 +665,16 @@ static peg_parser const ps[NUM_OF_PEG_TYPE] = {	// jump table for each parsing r
 	peg_parse_string_pattern
 };
 
-ParsedString * peg_parse_string_negative(PegParser const * rs, PegRule const * r, char const * str) {
-	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str);
+ParsedString * peg_parse_string_negative(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
+	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str, table);
 	if (!p) {
 		return make_parsed_string(NULL, r, 0, str, NULL);
 	}
 	free_parsed_string(p);
 	return NULL;
 }
-ParsedString * peg_parse_string_and(PegParser const * rs, PegRule const * r, char const * str) {
-	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str);
+ParsedString * peg_parse_string_and(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
+	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str, table);
 	if (p) {
 		ParsedString * px = make_parsed_string(NULL, r, 0, str, NULL);
 		free_parsed_string(p);
@@ -617,8 +682,8 @@ ParsedString * peg_parse_string_and(PegParser const * rs, PegRule const * r, cha
 	}
 	return NULL;
 }
-ParsedString * peg_parse_string_exists  (PegParser const * rs, PegRule const * r, char const * str) {
-	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str);
+ParsedString * peg_parse_string_exists  (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
+	ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str, table);
 	if (p)
 		return make_parsed_string(NULL, r, strlen(p->mstr), str, make_parsed_string_bin(p, NULL));
 	else
@@ -643,11 +708,11 @@ size_t count_parsed_string_bin (ParsedStringBin const * xs) {
 	return count;
 }
 
-ParsedString * peg_parse_string_plus(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_plus(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	size_t sumlen=ps ? strlen(ps->mstr) : 0;
 	while (1) {
-		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen);
+		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, table);
 		if(!p)
 			break;
 		push_back_parsed_string(ps, p);
@@ -666,11 +731,11 @@ ParsedString * peg_parse_string_plus(PegParser const * rs, PegRule const * r, ch
 		return NULL;
 	}
 }
-ParsedString * peg_parse_string_repeat(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_repeat(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	size_t sumlen=ps ? strlen(ps->mstr) : 0;
 	while (ps) {
-		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen);
+		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, table);
 		if (!p)
 			break;
 		push_back_parsed_string(ps, p);
@@ -687,22 +752,22 @@ ParsedString * peg_parse_string_repeat(PegParser const * rs, PegRule const * r, 
 	else
 		return make_parsed_string(NULL, r, 0, str, NULL);
 }
-ParsedString * peg_parse_string_any(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_any(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	if (strlen(str))
 		return make_parsed_string(NULL, r, 1, str, NULL);
 	else
 		return NULL;
 }
-ParsedString * peg_parse_string_class(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_class(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	NOTIMPL;
 	return NULL;
 }
-ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	peg_rule_bin const * iter = r->body.refs;
 	size_t sumlen = 0;
 	for (; iter; iter=iter->next) {
-		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str+sumlen);
+		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str+sumlen, table);
 		if (!p) {
 			free_parsed_string(ps);
 			return NULL;
@@ -712,11 +777,11 @@ ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, cha
 	}
 	return ps;
 }
-ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	peg_rule_bin const * iter = r->body.refs;
 	for (; iter; iter=iter->next) {
-		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str);
+		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str, table);
 		if (p) {
 			push_back_parsed_string(ps, p);
 			return ps;
@@ -734,13 +799,13 @@ NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * iden
 	}
 	return NULL;
 }
-ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	NamedPegRule const * r_ = find_named_peg_rule(rs, r->body.str);
 	ASSERT(r_!=NULL, "It is certainly found.\n");
-	return peg_parse_string_impl(rs, r_->rule, str);
+	return peg_parse_string_impl(rs, r_->rule, str, table);
 }
 
-ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r, char const * str) {
+ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
 	ASSERT(r && r->kind==PEG_PATTERN, "require kind 'pattern'\n"); {
 	size_t const len=strlen(r->body.str);
 	if (!strncmp(r->body.str, str, len))
@@ -749,14 +814,101 @@ ParsedString * peg_parse_string_pattern (PegParser const * rs, PegRule const * r
 		return NULL;
 } }
 
-// parse input string with `rule`
-ParsedString * peg_parse_string_impl(PegParser const * rs, PegRule const * r, char const * str) {
-	return ps[r->kind](rs, r, str);
+// parse input string with rule 'r'
+ParsedString * peg_parse_string_impl(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
+	return ps[r->kind](rs, r, str, table);
+}
+
+//row_cache_table ** make_cache_tables (PegParser
+
+PegCacheTable * make_peg_cache_table(char const * str) {
+	PegCacheTable * table = ALLOC(PegCacheTable, 1);
+	size_t len = strlen(str);
+	size_t i;
+	table->rs   = ALLOC(row_cache_table*, len);
+	for (i=0; i<len; ++i)
+		table->rs[i] = NULL;
+	table->size = len;
+	table->str  = str;
+	return table;
+}
+
+/*
+void build_peg_cache_table(PegParser const * parser, char const * str) {
+	PegParser * r = (PegParser*)parser;    // 'table' member is mutable 
+	r->table = make_peg_cahce_table(str);  // rewriting is unobsevable from without
+}
+*/
+
+void free_cache_elem(cache_elem * e) {
+	if (e) {
+		if (e->result_tree) {
+			free_parsed_string(e->result_tree);
+			e->result_tree = NULL;
+		}
+		free(e);
+	}
+}
+
+void free_row_cache_table(row_cache_table * rs) {
+	if (rs) {
+		size_t i;
+		for (i=0; i<rs->size; ++i) {
+			free_cache_elem(rs->es[i]);
+			rs->es[i] = NULL;
+		}
+		free(rs->es);
+		rs->es = NULL;
+		rs->size = 0;
+		free(rs);
+	}
+}
+
+void free_peg_cache_table(PegCacheTable * table) {
+	if (table) {
+		size_t i;
+		for (i=0; i<table->size; ++i) {
+			free_row_cache_table(table->rs[i]);
+			table->rs[i] = NULL;
+		}
+		free(table->rs);
+		table->rs   = NULL;
+		table->size = 0;
+		table->str  = NULL; // have no ownership
+		free(table);
+	}
+}
+
+ParsedStringBin * dup_parsed_string_bin(ParsedStringBin const * ps) {
+	ParsedStringBin * ps_ = NULL;
+	if (ps) {
+		ps_ = ALLOC(ParsedStringBin, 1);
+		ps_->ps = dup_parsed_string(ps->ps);
+		ps_->next = dup_parsed_string_bin(ps->next);
+	}
+	return ps_;
+}
+
+ParsedString * dup_parsed_string(ParsedString const * ps) {
+	ParsedString * ps_ = NULL;
+	if (ps) {
+		ps_ = ALLOC(ParsedString, 1);
+		ps_->ident = ps->ident ? strdup(ps->ident) : NULL;
+		ps_->rule  = dup_peg_rule(ps->rule);
+		ps_->mstr  = strdup(ps->mstr);
+		ps_->nest  = dup_parsed_string_bin(ps->nest);
+	}
+	return ps_;
 }
 
 ParsedString * peg_parse_string(PegParser const * pegs, char const * str) {
+	PegCacheTable * table  = NULL;
+	ParsedString  * result = NULL;
 	ASSERT(pegs && (0<pegs->size), "parse execute without rules :(\n");
-	return peg_parse_string_impl(pegs, pegs->nps[0]->rule, str);
+	table  = make_peg_cache_table(str);
+	result = dup_parsed_string(peg_parse_string_impl(pegs, pegs->nps[0]->rule, str, table));
+	free_peg_cache_table(table);
+	return result;
 }
 
 static void print_ntimes(char const * str, int n) {
