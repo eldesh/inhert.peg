@@ -1465,6 +1465,48 @@ void sample (void) {
 
 		free_peg_parser(fizzbazz_parser);
 	}
+
+	// direct recursive test
+	/*
+	{
+		// x <- x + one
+		// one <- '1'
+		NamedPegRule * x = make_named_peg_rule("x", make_peg_rule(PEG_SEQ,
+														make_peg_rule_bin(make_peg_rule(PEG_IDENT  , "x"),
+														make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "+"),
+														make_peg_rule_bin(make_peg_rule(PEG_IDENT  , "one"), NULL)))));
+		NamedPegRule * one = make_named_peg_rule("one", make_peg_rule(PEG_PATTERN, "1"));
+		PegParser * direct_rec_parser = make_peg_parser();
+		ParsedString * r = NULL;
+
+		print_named_peg_rule(x);
+		print_named_peg_rule(one);
+
+		push_back_peg_parser(direct_rec_parser, x);
+		push_back_peg_parser(direct_rec_parser, one);
+
+//		ASSERT(peg_parse_string(direct_rec_parser, "")            ==NULL, "don't match!\n");
+
+		r = peg_parse_string(direct_rec_parser, "1");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(direct_rec_parser, "1+1");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(direct_rec_parser, "1+1+1");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(direct_rec_parser, "1+1+1+1");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		free_peg_parser(direct_rec_parser);
+	}
+	*/
+
 	printf("end\n");
 }
 
