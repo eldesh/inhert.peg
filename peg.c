@@ -264,6 +264,7 @@ void print_parsed_string_bin_impl(char const * open
 								, char const * sep
 								, char const * close
 								, size_t depth);
+void print_peg_cache_table(PegCacheTable const * table);
 
 //// parse
 ParsedString * peg_parse_string     (PegParser const * pegs, char const * str);
@@ -282,6 +283,7 @@ bool push_back_peg_parser_as_root(PegParser * p, NamedPegRule * npr);
 size_t length_peg_rule_bin (peg_rule_bin const * rs);
 static bool is_alter_rule (PEG_KIND kind);
 static void print_ntimes(char const * str, int n);
+char const * kind_to_string(PEG_KIND k);
 
 NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident);
 
@@ -857,6 +859,7 @@ ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, cha
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	peg_rule_bin const * iter = r->body.refs;
 	size_t sumlen = 0;
+//	printf("seq start:"); print_peg_cache_table(&table);
 	for (; iter; iter=iter->next) {
 		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str+sumlen, advance_peg_cache_table(table, sumlen));
 		if (!p) {
@@ -866,6 +869,7 @@ ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, cha
 		sumlen += strlen(p->mstr);
 		push_back_parsed_string(ps, p);
 	}
+//	printf("seq end:"); print_peg_cache_table(&table);
 	return ps;
 }
 ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable table) {
@@ -890,7 +894,34 @@ NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * iden
 	}
 	return NULL;
 }
-ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable * table) {
+
+cache_elem * make_cache_elem (ParsedString * r) {
+	cache_elem * e = ALLOC(cache_elem, 1);
+	e->result_tree = r;
+	return e;
+}
+
+raw_cache_table * make_raw_cache_table(PegParser const * rs) {
+	size_t i;
+	raw_cache_table * r = ALLOC(raw_cache_table, 1);
+	r->size = rs->size;
+	r->es   = ALLOC(cache_elem*, r->size);
+	for (i=0; i<r->size; ++i)
+		r->es[i] = make_cache_elem(NULL);
+	return r;
+}
+
+size_t index_of_ident(PegParser const * rs, char const * ident) {
+	size_t i;
+	for (i=0; i<rs->size; ++i) {
+		if (!strcmp(ident, rs->nps[i]->name))
+			return i;
+	}
+	ASSERT(false, "unknown identifier is passed\n");
+	return 0;
+}
+
+ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, char const * str, PegCacheTable table) {
 	NamedPegRule const * r_ = find_named_peg_rule(rs, r->body.str);
 	ASSERT(r_!=NULL, "It is certainly found.\n");
 //	printf(" ident(%s) <- %s\n", r->body.str, str); print_peg_cache_table(&table);
@@ -1107,6 +1138,59 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 }
 void print_parsed_string(ParsedString const * ps) {
 	print_parsed_string_impl(ps, 0);
+}
+
+
+char const * kind_to_string(PEG_KIND k) {
+	switch (k) {
+	case PEG_NEGATIVE: return "PEG_NEGATIVE";
+	case PEG_AND     : return "PEG_AND";
+	case PEG_EXISTS  : return "PEG_EXISTS";
+	case PEG_PLUS    : return "PEG_PLUS";
+	case PEG_REPEAT  : return "PEG_REPEAT";
+	case PEG_ANY     : return "PEG_ANY";
+	case PEG_CHOICE  : return "PEG_CHOICE";
+	case PEG_SEQ     : return "PEG_SEQ";
+	case PEG_CLASS   : return "PEG_CLASS";
+	case PEG_IDENT   : return "PEG_IDENT";
+	case PEG_PATTERN : return "PEG_PATTERN";
+	default:
+					   return "UNKNOWN PEG_KIND IS PASSED";
+	}
+}
+
+void print_cache_elem(cache_elem const * elem) {
+	if (elem && elem->result_tree)
+	{
+		printf("%s:", kind_to_string(elem->result_tree->rule->kind));
+		if (elem->result_tree->ident)
+			printf("%s", elem->result_tree->ident);
+	} else {
+		printf("(NONE)");
+	}
+}
+
+void print_raw_cache_table(raw_cache_table const * rc) {
+	size_t i;
+	if (!rc)
+		return;
+	for (i=0; i<rc->size; ++i) {
+		print_cache_elem(rc->es[i]);
+		printf(" |");
+	}
+}
+
+void print_peg_cache_table(PegCacheTable const * table) {
+	size_t i;
+	print_ntimes("-", 64); puts("");
+	if (table) {
+		for (i=0; i<table->size; ++i) {
+			printf("[%3d] raw:", i);
+			print_raw_cache_table(table->rs[i]); puts("");
+		}
+	}
+	print_ntimes("-", 64); puts("");
+	fflush(stdout);
 }
 
 char * char_str(char c) {
