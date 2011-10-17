@@ -217,12 +217,16 @@ peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, ParsedStringBin * nest);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
+raw_cache_table * make_raw_cache_table(PegParser const * rs);
 
 //// dtor
-void free_peg_rule(PegRule * pr);
+void free_peg_rule             (PegRule * pr);
+bool free_peg_rule_except_ident(PegRule * pr);
 void free_named_peg_rule(NamedPegRule * npr);
 void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
+void free_fail_parsed_string    (ParsedString    * ps);
+void free_fail_parsed_string_bin(ParsedStringBin * psb);
 void free_peg_parser(PegParser * p);
 
 void free_peg_cache_table(PegCacheTable * table);
@@ -449,6 +453,27 @@ size_t length_peg_rule_bin (peg_rule_bin const * rs) {
 	return len;
 }
 
+
+void free_peg_rule_bin(peg_rule_bin * p) {
+	if (p) {
+		free_peg_rule(p->ref);
+		p->ref = NULL;
+		free_peg_rule_bin(p->next);
+		p->next = NULL;
+		free(p);
+	}
+}
+
+void free_peg_rule_bin_except_ident(peg_rule_bin * p) {
+	if (p) {
+		if (free_peg_rule_except_ident(p->ref))
+			p->ref = NULL;
+		free_peg_rule_bin_except_ident(p->next);
+		p->next = NULL;
+		free(p);
+	}
+}
+
 void free_peg_rule(PegRule * pr) {
 	if (pr) {
 		switch (pr->kind) {
@@ -481,6 +506,43 @@ void free_peg_rule(PegRule * pr) {
 		free(pr);
 	}
 }
+
+// return true if pr is free
+bool free_peg_rule_except_ident(PegRule * pr) {
+	if (pr) {
+		switch (pr->kind) {
+			case PEG_NEGATIVE:
+			case PEG_AND     :
+			case PEG_EXISTS  :
+			case PEG_PLUS    :
+			case PEG_REPEAT  :
+			case PEG_ANY     :
+				if (free_peg_rule_except_ident(pr->body.ref))
+					pr->body.ref = NULL;
+				break;
+			case PEG_CLASS   :     
+				NOTIMPL;
+				break;
+			case PEG_SEQ     :
+			case PEG_CHOICE  :	   
+				free_peg_rule_bin_except_ident(pr->body.refs);
+				pr->body.refs = NULL;
+				break;
+			case PEG_IDENT   :     
+				return false;
+			case PEG_PATTERN :
+				free(pr->body.str);
+				pr->body.str = NULL;
+				break;
+			default:
+				WARN("unkown PEG rule is specified (%d)\n", pr->kind);
+				return false;
+		}
+		free(pr);
+	}
+	return true;
+}
+
 
 void free_named_peg_rule(NamedPegRule * npr) {
 	if (npr) {
@@ -526,18 +588,39 @@ void free_parsed_string_bin(ParsedStringBin * psb) {
 		free(psb);
 	}
 }
+
+void free_fail_parsed_string_bin(ParsedStringBin * psb) {
+	if (psb) {
+		free_fail_parsed_string_bin(psb->next);
+		psb->next = NULL;
+		free_fail_parsed_string(psb->ps);
+		psb->ps = NULL;
+		free(psb);
+	}
+}
+
 void free_parsed_string(ParsedString * ps) {
 	if (ps) {
 		free(ps->ident);
 		ps->ident = NULL;
-		if (ps->rule) {
-			free_parsed_string_bin(ps->nest);
-			ps->nest = NULL;
-		}
+		free_parsed_string_bin(ps->nest);
+		ps->nest = NULL;
 		free(ps->mstr);
 		ps->mstr = NULL;
 		free_peg_rule(ps->rule);
 		ps->rule = NULL;
+		free(ps);
+	}
+}
+
+void free_fail_parsed_string(ParsedString * ps) {
+	if (ps && !ps->ident) {
+		free_fail_parsed_string_bin(ps->nest);
+		ps->nest = NULL;
+		free(ps->mstr);
+		ps->mstr = NULL;
+		if (free_peg_rule_except_ident(ps->rule))
+			ps->rule = NULL;
 		free(ps);
 	}
 }
@@ -727,7 +810,7 @@ ParsedString * peg_parse_string_plus(PegParser const * rs, PegRule const * r, ch
 	if (0<count_parsed_string_bin(ps->nest))
 		return ps;
 	else {
-		free_parsed_string(ps);
+		free_fail_parsed_string(ps);
 		return NULL;
 	}
 }
@@ -777,7 +860,7 @@ ParsedString * peg_parse_string_seq(PegParser const * rs, PegRule const * r, cha
 	for (; iter; iter=iter->next) {
 		ParsedString * p = peg_parse_string_impl(rs, iter->ref, str+sumlen, advance_peg_cache_table(table, sumlen));
 		if (!p) {
-			free_parsed_string(ps);
+			free_fail_parsed_string(ps);
 			return NULL;
 		}
 		sumlen += strlen(p->mstr);
@@ -795,7 +878,7 @@ ParsedString * peg_parse_string_choice(PegParser const * rs, PegRule const * r, 
 			return ps;
 		}
 	}
-	free_parsed_string(ps);
+	free_fail_parsed_string(ps);
 	return NULL;
 }
 
