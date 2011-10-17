@@ -227,7 +227,6 @@ raw_cache_table * make_raw_cache_table(PegParser const * rs);
 
 //// dtor
 void free_peg_rule             (PegRule * pr);
-bool free_peg_rule_except_ident(PegRule * pr);
 void free_named_peg_rule(NamedPegRule * npr);
 void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
@@ -290,6 +289,7 @@ size_t length_peg_rule_bin (peg_rule_bin const * rs);
 static bool is_alter_rule (PEG_KIND kind);
 static void print_ntimes(char const * str, int n);
 char const * kind_to_string(PEG_KIND k);
+PegCacheTable advance_peg_cache_table (PegCacheTable table, size_t n);
 
 NamedPegRule const * find_named_peg_rule(PegParser const * rs, char const * ident);
 
@@ -472,16 +472,6 @@ void free_peg_rule_bin(peg_rule_bin * p) {
 	}
 }
 
-void free_peg_rule_bin_except_ident(peg_rule_bin * p) {
-	if (p) {
-		if (free_peg_rule_except_ident(p->ref))
-			p->ref = NULL;
-		free_peg_rule_bin_except_ident(p->next);
-		p->next = NULL;
-		free(p);
-	}
-}
-
 void free_peg_rule(PegRule * pr) {
 	if (pr) {
 		switch (pr->kind) {
@@ -514,43 +504,6 @@ void free_peg_rule(PegRule * pr) {
 		free(pr);
 	}
 }
-
-// return true if pr is free
-bool free_peg_rule_except_ident(PegRule * pr) {
-	if (pr) {
-		switch (pr->kind) {
-			case PEG_NEGATIVE:
-			case PEG_AND     :
-			case PEG_EXISTS  :
-			case PEG_PLUS    :
-			case PEG_REPEAT  :
-			case PEG_ANY     :
-				if (free_peg_rule_except_ident(pr->body.ref))
-					pr->body.ref = NULL;
-				break;
-			case PEG_CLASS   :     
-				NOTIMPL;
-				break;
-			case PEG_SEQ     :
-			case PEG_CHOICE  :	   
-				free_peg_rule_bin_except_ident(pr->body.refs);
-				pr->body.refs = NULL;
-				break;
-			case PEG_IDENT   :     
-				return false;
-			case PEG_PATTERN :
-				free(pr->body.str);
-				pr->body.str = NULL;
-				break;
-			default:
-				WARN("unkown PEG rule is specified (%d)\n", pr->kind);
-				return false;
-		}
-		free(pr);
-	}
-	return true;
-}
-
 
 void free_named_peg_rule(NamedPegRule * npr) {
 	if (npr) {
@@ -627,8 +580,8 @@ void free_fail_parsed_string(ParsedString * ps) {
 		ps->nest = NULL;
 		free(ps->mstr);
 		ps->mstr = NULL;
-		if (free_peg_rule_except_ident(ps->rule))
-			ps->rule = NULL;
+		free_peg_rule(ps->rule);
+		ps->rule = NULL;
 		free(ps);
 	}
 }
@@ -790,6 +743,15 @@ void push_back_parsed_string (ParsedString * ps, ParsedString * p) {
 			iter = iter->next;
 		iter->next = make_parsed_string_bin(p, NULL);
 	}
+	{
+		size_t len = (ps->mstr ? strlen(ps->mstr) : 0) + (p->mstr ? strlen(p->mstr) : 0) +1;
+		char * buff = ALLOC(char, len+1);
+		strcpy(buff, ps->mstr);
+		strcpy(buff+strlen(ps->mstr), p->mstr);
+		buff[len-1] = '\0';
+		free(ps->mstr);
+		ps->mstr = buff;
+	}
 }
 
 size_t count_parsed_string_bin (ParsedStringBin const * xs) {
@@ -939,8 +901,9 @@ ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, c
 		if (!table.rs[0]->es[idx]->result_tree) {
 			 ParsedString * rn = peg_parse_string_impl(rs, r_->rule, str, table);
 			 if (rn) {
-				 table.rs[0]->es[idx]->result_tree  // store to the cache table
-					 = make_parsed_string(r->body.str, r, strlen(rn->mstr), rn->mstr, make_parsed_string_bin(rn,NULL));
+				 rn->ident = strdup(r->body.str);
+				 table.rs[0]->es[idx]->result_tree = rn; // store to the cache table
+					 //= make_parsed_string(r->body.str, r, strlen(rn->mstr), rn->mstr, make_parsed_string_bin(rn,NULL));
 			 }
 		}
 //		printf(" ident(%s) <- %s\n", r->body.str, str); print_peg_cache_table(&table);
@@ -977,18 +940,25 @@ PegCacheTable * make_peg_cache_table(char const * str) {
 	return table;
 }
 
-/*
-void build_peg_cache_table(PegParser const * parser, char const * str) {
-	PegParser * r = (PegParser*)parser;    // 'table' member is mutable 
-	r->table = make_peg_cahce_table(str);  // rewriting is unobsevable from without
-}
-*/
-
 void free_cache_elem(cache_elem * e) {
 	if (e) {
-		if (e->result_tree) {
-			free_parsed_string(e->result_tree);
-			e->result_tree = NULL;
+		ParsedString * ps =e->result_tree;
+		if (ps) {
+			if (ps->ident) {
+				free(ps->ident);
+				ps->ident = NULL;
+				free_peg_rule(ps->rule);
+				ps->rule = NULL;
+				free(ps->mstr);
+				ps->mstr = NULL;
+				// delete children if not 'IDENT'
+				// ('IDENT':ParsedString*) is cached
+				free_fail_parsed_string_bin(ps->nest);
+				ps->nest = NULL;
+			} else {
+				ASSERT(false, "a rule is cached except for IDENT-rules\n");
+			}
+			free(ps);
 		}
 		free(e);
 	}
@@ -1014,6 +984,7 @@ void free_peg_cache_table(PegCacheTable * table) {
 		for (i=0; i<table->size; ++i) {
 			free_row_cache_table(table->rs[i]);
 			table->rs[i] = NULL;
+//			printf("raw:del(%d)\n", i); print_peg_cache_table(table);
 		}
 		free(table->rs);
 		table->rs   = NULL;
@@ -1265,16 +1236,26 @@ void sample (void) {
 								cons_peg_rule(make_peg_rule(PEG_PATTERN,")"), NULL)))),
 							cons_peg_rule(
 								make_peg_rule(PEG_IDENT, "deci"), NULL))));
+
+		NamedPegRule * deci = make_named_peg_rule("deci", peg_digit());
+
 		PegParser * peg = make_peg_parser();
+		ParsedString * r    = NULL;
 
 		print_named_peg_rule(add);
 		print_named_peg_rule(mul);
 		print_named_peg_rule(prim);
+		print_named_peg_rule(deci);
 
 		push_back_peg_parser(peg, add);
 		push_back_peg_parser(peg, mul);
 		push_back_peg_parser(peg, prim);
+		push_back_peg_parser(peg, deci);
 
+		r = peg_parse_string(peg, "3*(4+2)");
+		print_parsed_string(r);
+
+		free_parsed_string(r);
 		free_peg_parser(peg);
 	}
 
