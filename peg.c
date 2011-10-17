@@ -765,7 +765,7 @@ ParsedString * peg_parse_string_plus(PegParser const * rs, PegRule const * r, ch
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	size_t sumlen=ps ? strlen(ps->mstr) : 0;
 	while (1) {
-		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, table);
+		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, advance_peg_cache_table(table, sumlen));
 		if(!p)
 			break;
 		push_back_parsed_string(ps, p);
@@ -788,7 +788,7 @@ ParsedString * peg_parse_string_repeat(PegParser const * rs, PegRule const * r, 
 	ParsedString * ps = make_parsed_string(NULL, r, 0, str, NULL);
 	size_t sumlen=ps ? strlen(ps->mstr) : 0;
 	while (ps) {
-		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, table);
+		ParsedString * p = peg_parse_string_impl(rs, r->body.ref, str+sumlen, advance_peg_cache_table(table, sumlen));
 		if (!p)
 			break;
 		push_back_parsed_string(ps, p);
