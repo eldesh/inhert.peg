@@ -454,20 +454,20 @@ void free_peg_rule(PegRule * pr) {
 		switch (pr->kind) {
 			case PEG_NEGATIVE:
 			case PEG_AND     :
-			case PEG_SEQ     :
 			case PEG_EXISTS  :
 			case PEG_PLUS    :
 			case PEG_REPEAT  :
 			case PEG_ANY     :
-				free(pr->body.ref);
+				free_peg_rule(pr->body.ref);
 				pr->body.ref = NULL;
 				break;
 			case PEG_CLASS   :     
 				NOTIMPL;
 				break;
+			case PEG_SEQ     :
 			case PEG_CHOICE  :	   
-				free(pr->body.ref);
-				pr->body.ref = NULL;
+				free_peg_rule_bin(pr->body.refs);
+				pr->body.refs = NULL;
 				break;
 			case PEG_IDENT   :     
 			case PEG_PATTERN :
