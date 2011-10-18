@@ -1,5 +1,12 @@
 
+// detecting memory leaks
+#if defined(_WIN32) && defined(_DEBUG)
+#define _CRTDBG_MAP_ALLOC
+#  include <stdlib.h>
+#  include <crtdbg.h>
+#endif
 #include <inhert/peg.h>
+
 
 void sample (void) {
 	{
@@ -76,7 +83,6 @@ void sample (void) {
 		free_peg_parser(peg);
 	}
 
-	/*
 	{
 		NamedPegRule * pat  = make_named_peg_rule("hello", make_peg_rule(PEG_PATTERN, "HelloPEG"));
 		PegParser * pat_peg = make_peg_parser();
@@ -283,7 +289,6 @@ void sample (void) {
 
 		free_peg_parser(fizzbazz_parser);
 	}
-	*/
 
 	// direct recursive test
 	/*
@@ -331,7 +336,14 @@ void sample (void) {
 
 int main (void) {
 	sample();
+#if defined(_WIN32) && defined(_DEBUG)
+	if (_CrtDumpMemoryLeaks())
+		printf("Memory Leaks is found :(\n");
+	else
+		printf("Memory Leaks is not found :D\n");
+#endif
 	return 0;
 }
+
 
 

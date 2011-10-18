@@ -15,6 +15,30 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+#if defined _WIN32
+#  define __func__ __FUNCTION__
+#endif
+
+#if __STDC_VERSION__==199901L || 1200<_MSC_VER
+#  define WARN(...)    WARN_I(__VA_ARGS__)
+#  define WARN_I(...)  err_printf(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#else /* not support variadic macro */
+#  define WARN         err_printf_row("%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
+		               err_printf_row
+#endif
+
+#define NOTIMPL   WARN("not implement yet... \n")
+
+#define ASSERT(expr, str) ASSERT_I(expr, str)
+#define ASSERT_I(expr, str)                  \
+	do {                                     \
+		bool const pp_cond_tmp_ = (expr);    \
+		if (!pp_cond_tmp_) {                 \
+			WARN("%s", str);                 \
+			assert(false);                   \
+		}                                    \
+	} while (0)
+
 typedef enum { false=0, true } bool;
 
 #define NUM_OF_PEG_TYPE 11
@@ -172,6 +196,7 @@ extern peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *);
 
 // ctor
 PegRule      * make_peg_rule(PEG_KIND kind, void * body);
+peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
 
@@ -195,6 +220,10 @@ ParsedString * peg_parse_string(PegParser const * pegs, char const * str);
 PegRule * peg_alphabet  (void);
 PegRule * peg_digit     (void);
 PegRule * peg_alphadigit(void);
+
+// debug printer
+void err_printf_row(char const * format, ...);
+void err_printf(char const * file, int line, char const * func, char const * format, ...);
 
 #endif    /* INHERT_PEG_INCLUDED */
 

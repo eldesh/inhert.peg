@@ -50,10 +50,20 @@
  * compile :
  * 	> gcc -g -Wall -I peg/include -o libpeg.o -c peg/src/peg.c
  */
+
+// ignore warnings
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_NONSTDC_NO_DEPRECATE
+
 #include <stdio.h>
-#include <stdlib.h>
+// detecting memory leaks
+#if defined _WIN32 && defined _DEBUG
+#  define _CRTDBG_MAP_ALLOC
+#  include <stdlib.h>
+#  include <crtdbg.h>
+#else
+#  include <stdlib.h>
+#endif
 #include <string.h>
 #include <assert.h>
 #include <stddef.h>
@@ -63,20 +73,6 @@
 
 #define PP_STRINGIZE(s) PP_STRINGIZE_I(s)
 #define PP_STRINGIZE_I(s) #s
-
-#if defined _WIN32
-#  define __func__ __FUNCTION__
-#endif
-
-#if __STDC_VERSION__==199901L
-#  define WARN(...)    WARN_I(__VA_ARGS__)
-#  define WARN_I(...)  err_printf(__FILE__, __LINE__, __func__, __VA_ARGS__)
-#else /* not support variadic macro */
-#  define WARN         err_printf_row("%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__), \
-		               err_printf_row
-#endif
-
-#define NOTIMPL   WARN("not implement yet... \n")
 
 //#define LOG_HEAP
 #define ALLOC(ty, n) ALLOC_I(ty, n)
@@ -99,19 +95,6 @@ void FREE_LOG(char const * file, int line, char const * func, void * p) {
 }
 #endif /* defined LOG_HEAP */
 
-
-#define ASSERT(expr, str) ASSERT_I(expr, str)
-#define ASSERT_I(expr, str)                  \
-	do {                                     \
-		bool const pp_cond_tmp_ = (expr);    \
-		if (!pp_cond_tmp_) {                 \
-			WARN("%s", str);                 \
-			assert(false);                   \
-		}                                    \
-	} while (0)
-
-
-#define NUM_OF_PEG_TYPE 11
 
 //////// forward referece
 
