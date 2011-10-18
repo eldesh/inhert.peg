@@ -902,9 +902,11 @@ ParsedString * dup_parsed_string(ParsedString const * ps) {
 ParsedString * peg_parse_string(PegParser const * pegs, char const * str) {
 	PegCacheTable * table  = NULL;
 	ParsedString  * result = NULL;
+	PegRule * start_rule = make_peg_rule(PEG_IDENT, pegs->nps[0]->name); // for start parsing from IDENT rule
 	ASSERT(pegs && (0<pegs->size), "parse execute without rules :(\n");
 	table  = make_peg_cache_table(str);
-	result = dup_parsed_string(peg_parse_string_impl(pegs, pegs->nps[0]->rule, str, *table));
+	result = dup_parsed_string(peg_parse_string_impl(pegs, start_rule, str, *table));
+	free_peg_rule(start_rule);
 //	printf("R root\n"); print_peg_cache_table(table);
 	free_peg_cache_table(table);
 	return result;
@@ -1060,20 +1062,27 @@ char * char_str(char c) {
 	cc[1] = '\0';
 	return cc;
 }
-peg_rule_bin * cons_chars_as_peg_rule (char const * str) {
-	if (*str=='\0')
-		return NULL;
-	else
-		return cons_peg_rule(make_peg_rule(PEG_PATTERN, char_str(*str)), cons_chars_as_peg_rule(str+1));
+peg_rule_bin * cons_chars_as_peg_rule (size_t size, char const * const strs[]) {
+	int i;
+	peg_rule_bin * rs=NULL;
+	for (i=size-1; 0<=i; --i) // add rules from backward for preserve order of strs
+		rs = cons_peg_rule(make_peg_rule(PEG_PATTERN, (void*)strs[i]), rs);
+	return rs;
 }
 
 PegRule * peg_alphabet  (void) {
-	static char const * alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(alpha));
+	static char const * alpha[] =
+	{
+		"a","b","c","d","e","f","g","h","i","j","k","l","m",
+		"n","o","p","q","r","s","t","u","v","w","x","y","z",
+		"A","B","C","D","E","F","G","H","I","J","K","L","M",
+		"N","O","P","Q","R","S","T","U","V","W","X","Y","Z"
+	};
+	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(52, alpha));
 }
 PegRule * peg_digit (void) {
-	static char const * digit = "0123456789";
-	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(digit));
+	static char const * digit[] = {"0","1","2","3","4","5","6","7","8","9"};
+	return make_peg_rule(PEG_CHOICE, cons_chars_as_peg_rule(10, digit));
 }
 PegRule * peg_alphadigit (void) {
 	return make_peg_rule(PEG_CHOICE,

@@ -10,8 +10,14 @@
 
 void sample (void) {
 	{
-		print_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-		print_peg_rule(make_peg_rule(PEG_SEQ, NULL));
+		PegRule * fact = make_peg_rule(PEG_IDENT, "fact");
+		PegRule * seq  = make_peg_rule(PEG_SEQ, NULL);
+
+		print_peg_rule(fact);
+		print_peg_rule(seq);
+
+		free_peg_rule(fact);
+		free_peg_rule(seq);
 		free_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
 		free_peg_rule(make_peg_rule(PEG_SEQ, NULL));
 	}
@@ -344,6 +350,7 @@ int main (void) {
 #endif
 	return 0;
 }
+
 
 
 
