@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual C++ Express 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "inhert.peg", "inhert.peg\inhert.peg.vcxproj", "{583BD726-3349-44F6-BA83-D55940EB2660}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sample", "sample\sample\sample.vcxproj", "{0D9594F8-9062-4B39-BC18-A51BD3A86D49}"
+	ProjectSection(ProjectDependencies) = postProject
+		{583BD726-3349-44F6-BA83-D55940EB2660} = {583BD726-3349-44F6-BA83-D55940EB2660}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{583BD726-3349-44F6-BA83-D55940EB2660}.Debug|Win32.ActiveCfg = Debug|Win32
+		{583BD726-3349-44F6-BA83-D55940EB2660}.Debug|Win32.Build.0 = Debug|Win32
+		{583BD726-3349-44F6-BA83-D55940EB2660}.Release|Win32.ActiveCfg = Release|Win32
+		{583BD726-3349-44F6-BA83-D55940EB2660}.Release|Win32.Build.0 = Release|Win32
+		{0D9594F8-9062-4B39-BC18-A51BD3A86D49}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0D9594F8-9062-4B39-BC18-A51BD3A86D49}.Debug|Win32.Build.0 = Debug|Win32
+		{0D9594F8-9062-4B39-BC18-A51BD3A86D49}.Release|Win32.ActiveCfg = Release|Win32
+		{0D9594F8-9062-4B39-BC18-A51BD3A86D49}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

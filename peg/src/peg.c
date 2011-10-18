@@ -23,7 +23,7 @@
  *
  *  License:         Modified-BSD license
  *  Portability:     to be portable :)
- *  Ported to:       GCC4.5
+ *  Ported to:       GCC4.5, MSVC10
  *  Stability:       experimental
  *  Maintainer:      eldesh <nephits@gmail.com>
  *
@@ -46,11 +46,12 @@
  *     Principles of programming languages
  *
  ***************************************************************************** ****/
-
 /**
  * compile :
  * 	> gcc -g -Wall -I peg/include -o libpeg.o -c peg/src/peg.c
  */
+#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_NONSTDC_NO_DEPRECATE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,6 +63,10 @@
 
 #define PP_STRINGIZE(s) PP_STRINGIZE_I(s)
 #define PP_STRINGIZE_I(s) #s
+
+#if defined _WIN32
+#  define __func__ __FUNCTION__
+#endif
 
 #if __STDC_VERSION__==199901L
 #  define WARN(...)    WARN_I(__VA_ARGS__)
@@ -197,11 +202,13 @@ peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rul
 
 //////// function
 
+#if !defined _WIN32
 char * strdup(char const * str) {
 	size_t size = strlen(str);
 	char * s = ALLOC(char, size+1);
 	return strcpy(s, str);
 }
+#endif
 char * strndup(char const * str, size_t size) {
 	char * s = ALLOC(char, size+1);
 	strncpy(s, str, size);
@@ -332,7 +339,7 @@ bool push_back_peg_parser_as_root(PegParser * p, NamedPegRule * npr) {
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr) {
 	if (p) {
 		size_t const newsize = p->size+1;
-		NamedPegRule const ** extend = (NamedPegRule const **)realloc(p->nps, sizeof(NamedPegRule*)*newsize);
+		NamedPegRule ** extend = (NamedPegRule **)realloc(p->nps, sizeof(NamedPegRule*)*newsize);
 		if (extend) {
 			p->nps = extend;
 			p->size = newsize;

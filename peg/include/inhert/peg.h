@@ -153,7 +153,7 @@ PegCacheTable;
 typedef
 	struct peg_parser_ {
 		size_t size;
-		NamedPegRule const ** nps;
+		NamedPegRule ** nps;
 	}
 PegParser;
 
