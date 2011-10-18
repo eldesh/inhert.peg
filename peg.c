@@ -1254,10 +1254,24 @@ void sample (void) {
 		push_back_peg_parser(peg, prim);
 		push_back_peg_parser(peg, deci);
 
+		assert(!peg_parse_string(peg, ""));
+
+		r = peg_parse_string(peg, "9");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(peg, "(7)");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
+		r = peg_parse_string(peg, "1+2");
+		print_parsed_string(r);
+		free_parsed_string(r);
+
 		r = peg_parse_string(peg, "3*(4+2)");
 		print_parsed_string(r);
-
 		free_parsed_string(r);
+
 		free_peg_parser(peg);
 	}
 
