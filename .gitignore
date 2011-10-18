@@ -1,0 +1,9 @@
+# general binary files
+*.exe
+*.a
+*.o
+# working directories created by VisualStudio
+sample/sample/Debug/*
+sample/sample/Release/*
+inhert.peg/Debug/*
+inhert.peg/Release/*
