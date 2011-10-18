@@ -1,8 +1,50 @@
 /**** *****************************************************************************
  *
- * INHERT.PEG Generator Library
+ * INHERT.PEG Parser Generator Library
  *
- * 	 PEG: Parsing Expression Grammer
+ *
+ * PEG Parser Generator Library
+ * -----------------------------------
+ *
+ *  PEG is abbreviation of 'P'arsing 'E'xpression 'G'rammar.
+ *  This is the way to define grammars formally.
+ *  This library implements a 'parser combinator' for parsing PEG-ruled grammars.
+ *  The combinators built with this library,
+ *  with memoization of temporal results and lazy building of cache tables,
+ *  parse given strings at linear time.
+ *
+ *  including:
+ *  - parser combinators
+ *  - combinator builders
+ *  - pretty printer (combinators and grammars and their results)
+ *
+ * Info
+ * ----------
+ *
+ *  License:         Modified-BSD license
+ *  Portability:     to be portable :)
+ *  Ported to:       GCC4.5
+ *  Stability:       experimental
+ *  Maintainer:      eldesh <nephits@gmail.com>
+ *
+ *
+ * References
+ * ----------
+ *
+ * [1] Packrat Parsers Can Support Left Recursion
+ *     Alessandro Warth, James R. Douglass, Todd Millstein
+ *     VPRI Technical Report TR-2007-002
+ *
+ * [2] Packrat Parsing: Simple, Powerful, Lazy, Linear Time
+ *     Bryan Ford
+ *     Functional Pearl ICFP '02 Proceedings of the seventh ACM SIGPLAN
+ *     international conference on Functional programming 
+ *
+ * [3] Parsing expression grammars: a recognition-based syntactic foundation
+ *     Bryan Ford 
+ *     Proceedings of the 31st ACM SIGPLAN-SIGACT symposium on
+ *     Principles of programming languages
+ *
  ***************************************************************************** ****/
 
 /**
@@ -77,7 +119,7 @@ PegParser * make_peg_parser(void);
 row_cache_table * make_row_cache_table(PegParser const * rs);
 
 //// dtor
-void free_peg_rule             (PegRule * pr);
+void free_peg_rule(PegRule * pr);
 void free_named_peg_rule(NamedPegRule * npr);
 void free_parsed_string    (ParsedString    * ps);
 void free_parsed_string_bin(ParsedStringBin * psb);
