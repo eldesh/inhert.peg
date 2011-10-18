@@ -7,7 +7,7 @@
 
 /**
  * compile :
- * 	> gcc -g -o peg -Wall peg.c
+ * 	> gcc -g -Wall -I peg/include -o libpeg.o -c peg/src/peg.c
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +16,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <inhert/peg.h>
 
 #define PP_STRINGIZE(s) PP_STRINGIZE_I(s)
 #define PP_STRINGIZE_I(s) #s
@@ -63,157 +64,7 @@ void FREE_LOG(char const * file, int line, char const * func, void * p) {
 	} while (0)
 
 
-typedef enum { false=0, true } bool;
-
 #define NUM_OF_PEG_TYPE 11
-
-//// type
-
-typedef
-	enum peg_type {		// kind of match
-		PEG_NEGATIVE=0,	// x <- !A
-		PEG_AND,        // x <- &A
-		PEG_SEQ,        // x <- A B
-		PEG_EXISTS,     // x <- A?
-		PEG_PLUS,       // x <- A+
-		PEG_REPEAT,     // x <- A*
-		PEG_ANY,        // x <- .
-		PEG_CLASS,      // x <- [a-z]
-		PEG_CHOICE,		// x <- A / B / C
-		PEG_IDENT,      // e.g. Expr, Term, Factor(nonterminal symbol)
-		PEG_PATTERN     // e.g. "foobar", "template", "extends"(terminal symbol)
-	}
-PEG_KIND;
-
-struct peg_rule;
-struct peg_rule_bin;
-typedef struct peg_rule PegRule;
-
-struct peg_rule {
-	PEG_KIND kind; // type tag specify type of body(:union)
-	union {
-		char * str;                 // specified with string
-		struct peg_rule     * ref;  // have an alternative
-		struct peg_rule_bin * refs; // have more than one alternatives
-	} body;
-};
-struct peg_rule_bin {
-	struct peg_rule     * ref;
-	struct peg_rule_bin * next;
-};
-typedef struct peg_rule_bin peg_rule_bin;
-
-typedef
-	struct named_peg_rule_ {
-		char * name;    // assert(name)
-		PegRule * rule;
-	}
-NamedPegRule;
-
-struct parsed_string_;
-typedef struct parsed_string_ ParsedString;
-struct parsed_string_bin_;
-typedef struct parsed_string_bin_ ParsedStringBin;
-
-/***
- * ::parsed_string_
- * ::parsed_string_bin_
- *
- * <parsed_string_>
- * +------+
- * | Rule +--------------- ('m'atched 'str')
- * +-+----+       +----------+-----------------------+
- *   |            |                                  |
- *   |            +====+    +====+    +====+    +====+  
- *   +- (nest) -> | R  | -> | R  | -> | R  | -> | R  |  
- *                +====+    +====+    +====+    +====+
- *              [sub-rule]                 <parsed_string_bin_>
- * ***/
-
-struct parsed_string_ {
-	char    * ident; // Maybe name(of rule)
-	PegRule * rule;
-	char    * mstr; // matched string
-	// result of parsing for each parts of `rule`
-	ParsedStringBin * nest;
-};
-struct parsed_string_bin_ {
-	ParsedString    * ps;
-	ParsedStringBin * next;
-};
-
-/****
- * Cache Table Concept
- *
- * type :
- *   E = Parsed (| LR)
- *   RowE = [# size, E*]
- *   MaybeRowE = RowE*
- *   Table = ([# NamedPegRule], [# MaybeRowE])
- *
- * e.g.
- *           +----------- table->size ---------------+
- *           |                                       |
- *   +-------+----+----+----+----+----+----+----+----+
- *   |   /   |  3 |  * |  ( |  2 |  + |  4 |  ) | \0 |
- *   +-------+----+----+----+----+----+----+====+----+
- *   | add   |    |    |    |    |    |    | / /|    |
- *   +-------+----+----+----+----+----+----|/ / |----+    +-----------------------+
- *   | mul   |    |    |    |    |    |    | / /|  +----> | [ParsedString (| LR)] |
- *   +-------+----+----+----+----+----+----|/ / |----+    +-----------------------+
- *   | prim  |    |    |    |    |    |    | / /|    |
- *   +-------+----+----+----+----+----+----|/ / |----+
- *   | deci  |    |    |    |    |    |    | / /|    |
- *   +-------+----+----+----+----+----+----+=+==+----+
- *                                           |    [raw_cache_table]
- *                                           |    +-------------------------+
- *                                           +--> | add | mul | prim | deci |
- *                                                +-------------------------+
- * ****/
-
-// cache entry for result of parsing
-typedef
-	struct cache_elem_ {
-		ParsedString * result_tree; // Maybe ParseResult
-	}
-cache_elem;
-
-// row of cache table
-typedef
-	struct row_cache_table_ {
-		size_t size;
-		cache_elem ** es;
-	}
-row_cache_table;
-
-/**
- * row_cache *  = Maybe row_cache
- * row_cache ** = [# Maybe row_cache]
- */
-typedef
-	struct cache_table_ {
-		size_t size;        // == strlen(str) == count(rs)
-		row_cache_table ** rs;
-//		char const * str;	// use cache table with outer string
-	}
-PegCacheTable;
-
-typedef
-	struct peg_parser_ {
-		size_t size;
-		NamedPegRule const ** nps;
-	}
-PegParser;
-
-// weak reference to a string
-typedef struct substring_ {
-	char const * str;
-	size_t len;
-} substring;
-
-typedef
-	ParsedString * (*peg_parser) (PegParser const *, PegRule const *, char const *, PegCacheTable);
-
 
 //////// forward referece
 
@@ -223,7 +74,7 @@ peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, ParsedStringBin * nest);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
-raw_cache_table * make_raw_cache_table(PegParser const * rs);
+row_cache_table * make_row_cache_table(PegParser const * rs);
 
 //// dtor
 void free_peg_rule             (PegRule * pr);
@@ -301,7 +152,6 @@ PegRule * peg_alphadigit(void);
 
 /// synonym
 peg_rule_bin * (* const cons_peg_rule)(PegRule *, peg_rule_bin *) = make_peg_rule_bin;
-
 
 //////// function
 
@@ -870,9 +720,9 @@ cache_elem * make_cache_elem (ParsedString * r) {
 	return e;
 }
 
-raw_cache_table * make_raw_cache_table(PegParser const * rs) {
+row_cache_table * make_row_cache_table(PegParser const * rs) {
 	size_t i;
-	raw_cache_table * r = ALLOC(raw_cache_table, 1);
+	row_cache_table * r = ALLOC(row_cache_table, 1);
 	r->size = rs->size;
 	r->es   = ALLOC(cache_elem*, r->size);
 	for (i=0; i<r->size; ++i)
@@ -897,7 +747,7 @@ ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, c
 	if (table.size) {
 		size_t idx = index_of_ident(rs, r->body.str);
 		if (!table.rs[0])
-			 table.rs[0] = make_raw_cache_table(rs); // construct table for current positio of input string
+			 table.rs[0] = make_row_cache_table(rs); // construct table for current positio of input string
 //		printf(" ident(%s) <- %s\n", r->body.str, str); print_peg_cache_table(&table);
 		if (!table.rs[0]->es[idx]->result_tree) {
 			 ParsedString * rn = peg_parse_string_impl(rs, r_->rule, str, table);
@@ -985,7 +835,7 @@ void free_peg_cache_table(PegCacheTable * table) {
 		for (i=0; i<table->size; ++i) {
 			free_row_cache_table(table->rs[i]);
 			table->rs[i] = NULL;
-//			printf("raw:del(%d)\n", i); print_peg_cache_table(table);
+//			printf("row:del(%d)\n", i); print_peg_cache_table(table);
 		}
 		free(table->rs);
 		table->rs   = NULL;
@@ -1114,11 +964,11 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 			printf(") : %s", ps->ident ? ps->ident : "");
 	}
 }
+
 void print_parsed_string(ParsedString const * ps) {
 	print_parsed_string_impl(ps, 0);
 	puts("");
 }
-
 
 char const * kind_to_string(PEG_KIND k) {
 	switch (k) {
@@ -1149,7 +999,7 @@ void print_cache_elem(cache_elem const * elem) {
 	}
 }
 
-void print_raw_cache_table(raw_cache_table const * rc) {
+void print_row_cache_table(row_cache_table const * rc) {
 	size_t i;
 	if (!rc)
 		return;
@@ -1164,8 +1014,8 @@ void print_peg_cache_table(PegCacheTable const * table) {
 	print_ntimes("-", 64); puts("");
 	if (table) {
 		for (i=0; i<table->size; ++i) {
-			printf("[%3d] raw:", i);
-			print_raw_cache_table(table->rs[i]); puts("");
+			printf("[%3d] row:", i);
+			print_row_cache_table(table->rs[i]); puts("");
 		}
 	}
 	print_ntimes("-", 64); puts("");
@@ -1199,336 +1049,5 @@ PegRule * peg_alphadigit (void) {
 			cons_peg_rule(peg_digit   (), NULL)));
 }
 
-
-void sample (void) {
-	{
-		print_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-		print_peg_rule(make_peg_rule(PEG_SEQ, NULL));
-		free_peg_rule(make_peg_rule(PEG_IDENT, "fact"));
-		free_peg_rule(make_peg_rule(PEG_SEQ, NULL));
-	}
-
-	{
-		NamedPegRule * add =
-					make_named_peg_rule("add",
-						make_peg_rule(PEG_CHOICE,
-							cons_peg_rule(make_peg_rule(PEG_SEQ,
-								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"),
-								cons_peg_rule(make_peg_rule(PEG_PATTERN,"+"), 
-								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"), NULL)))),
-							cons_peg_rule(
-								make_peg_rule(PEG_IDENT, "mul"), NULL))));
-
-		NamedPegRule * mul =
-					make_named_peg_rule("mul",
-						make_peg_rule(PEG_CHOICE,
-							cons_peg_rule(make_peg_rule(PEG_SEQ,
-								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"prim"),
-								cons_peg_rule(make_peg_rule(PEG_PATTERN,"*"),
-								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"mul"), NULL)))),
-							cons_peg_rule(
-								make_peg_rule(PEG_IDENT, "prim"), NULL))));
-
-		NamedPegRule * prim=
-					make_named_peg_rule("prim",
-						make_peg_rule(PEG_CHOICE,
-							cons_peg_rule(make_peg_rule(PEG_SEQ,
-								cons_peg_rule(make_peg_rule(PEG_PATTERN,"("),
-								cons_peg_rule(make_peg_rule(PEG_IDENT  ,"add"),
-								cons_peg_rule(make_peg_rule(PEG_PATTERN,")"), NULL)))),
-							cons_peg_rule(
-								make_peg_rule(PEG_IDENT, "deci"), NULL))));
-
-		NamedPegRule * deci = make_named_peg_rule("deci", peg_digit());
-
-		PegParser * peg = make_peg_parser();
-		ParsedString * r    = NULL;
-
-		print_named_peg_rule(add);
-		print_named_peg_rule(mul);
-		print_named_peg_rule(prim);
-		print_named_peg_rule(deci);
-
-		push_back_peg_parser(peg, add);
-		push_back_peg_parser(peg, mul);
-		push_back_peg_parser(peg, prim);
-		push_back_peg_parser(peg, deci);
-
-		assert(!peg_parse_string(peg, ""));
-
-		r = peg_parse_string(peg, "9");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(peg, "(7)");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(peg, "1+2");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(peg, "3*(4+2)");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(peg);
-	}
-
-	{
-		NamedPegRule * pat  = make_named_peg_rule("hello", make_peg_rule(PEG_PATTERN, "HelloPEG"));
-		PegParser * pat_peg = make_peg_parser();
-		ParsedString * r    = NULL;
-		push_back_peg_parser(pat_peg, pat);
-		r = peg_parse_string(pat_peg, "HelloPEG");
-
-		print_named_peg_rule(pat);
-		print_parsed_string(r);
-
-		free_parsed_string(r);
-		free_peg_parser(pat_peg);
-	}
-
-	{
-		NamedPegRule * abc = make_named_peg_rule("aplus", make_peg_rule(PEG_PLUS, make_peg_rule(PEG_PATTERN, "a")));
-		PegParser * abc_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(abc);
-
-		push_back_peg_parser(abc_parser, abc);
-
-		ASSERT(peg_parse_string(abc_parser, "")==NULL, "don't match!\n");
-
-		r = peg_parse_string(abc_parser, "a");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abc_parser, "aa");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abc_parser, "aaaaaaaaaaaaaaaa");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(abc_parser);
-	}
-
-	{
-		NamedPegRule * bstar = make_named_peg_rule("bstar", make_peg_rule(PEG_REPEAT, make_peg_rule(PEG_PATTERN, "b")));
-		PegParser * bstar_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(bstar);
-
-		push_back_peg_parser(bstar_parser, bstar);
-
-		r = peg_parse_string(bstar_parser, "");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(bstar_parser, "b");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(bstar_parser, "bb");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(bstar_parser, "bbbbbbbbbbbbbbbbb");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(bstar_parser);
-	}
-
-	{
-		NamedPegRule * abalter = make_named_peg_rule("abalter", make_peg_rule(PEG_CHOICE,
-																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "a"),
-																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "b"), NULL))));
-		PegParser * abalter_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(abalter);
-
-		push_back_peg_parser(abalter_parser, abalter);
-
-		r = peg_parse_string(abalter_parser, "");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abalter_parser, "a");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abalter_parser, "b");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abalter_parser, "ab");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		ASSERT(peg_parse_string(abalter_parser, "c")==NULL, "don't match!\n");
-
-		free_peg_parser(abalter_parser);
-	}
-
-	{
-		NamedPegRule * abcseq = make_named_peg_rule("abcseq", make_peg_rule(PEG_SEQ,
-																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "a"),
-																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "b"),
-																	make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "c"), NULL)))));
-		PegParser * abcseq_parser = make_peg_parser();
-		ParsedString * r = NULL;
-		print_named_peg_rule(abcseq);
-		push_back_peg_parser(abcseq_parser, abcseq);
-
-		ASSERT(peg_parse_string(abcseq_parser, ""   )==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(abcseq_parser, "a"  )==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(abcseq_parser, "ab" )==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(abcseq_parser, "abb")==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(abcseq_parser, "bc" )==NULL, "don't match!\n");
-
-		r = peg_parse_string(abcseq_parser, "abc");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abcseq_parser, "abcd");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(abcseq_parser, "abcabcabcabc");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(abcseq_parser);
-	}
-
-	{
-		NamedPegRule * any = make_named_peg_rule("any", make_peg_rule(PEG_ANY, NULL));
-		PegParser * any_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(any);
-		push_back_peg_parser(any_parser, any);
-
-		ASSERT(peg_parse_string(any_parser, ""  )==NULL, "don't match!\n");
-
-		r = peg_parse_string(any_parser, "a");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(any_parser, "b");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(any_parser, " ");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(any_parser, ".");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(any_parser, "()");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(any_parser);
-	}
-
-	{
-		NamedPegRule * fizz     = make_named_peg_rule("fizz", make_peg_rule(PEG_PATTERN, "fizz"));
-		NamedPegRule * bazz     = make_named_peg_rule("bazz", make_peg_rule(PEG_PATTERN, "bazz"));
-		NamedPegRule * fizzbazz = make_named_peg_rule("fizzbazz",
-															make_peg_rule(PEG_SEQ,
-																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "1"),
-																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "2"),
-																make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "3"),
-																make_peg_rule_bin(make_peg_rule(PEG_IDENT, "fizz"),
-																make_peg_rule_bin(make_peg_rule(PEG_IDENT, "bazz"), NULL)))))));
-		PegParser * fizzbazz_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(fizz);
-		print_named_peg_rule(bazz);
-		print_named_peg_rule(fizzbazz);
-
-		push_back_peg_parser(fizzbazz_parser, fizzbazz);
-		push_back_peg_parser(fizzbazz_parser, bazz);
-		push_back_peg_parser(fizzbazz_parser, fizz);
-
-		ASSERT(peg_parse_string(fizzbazz_parser, "")            ==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(fizzbazz_parser, "1")           ==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(fizzbazz_parser, "12")          ==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(fizzbazz_parser, "123")         ==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(fizzbazz_parser, "123fizzbaz")  ==NULL, "don't match!\n");
-		ASSERT(peg_parse_string(fizzbazz_parser, " 123fizzbazz")==NULL, "don't match!\n");
-
-		r = peg_parse_string(fizzbazz_parser, "123fizzbazz");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(fizzbazz_parser, " 123fizzbazz");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(fizzbazz_parser, "123FIZZBAZZ");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(fizzbazz_parser);
-	}
-
-	// direct recursive test
-	/*
-	{
-		// x <- x + one
-		// one <- '1'
-		NamedPegRule * x = make_named_peg_rule("x", make_peg_rule(PEG_SEQ,
-														make_peg_rule_bin(make_peg_rule(PEG_IDENT  , "x"),
-														make_peg_rule_bin(make_peg_rule(PEG_PATTERN, "+"),
-														make_peg_rule_bin(make_peg_rule(PEG_IDENT  , "one"), NULL)))));
-		NamedPegRule * one = make_named_peg_rule("one", make_peg_rule(PEG_PATTERN, "1"));
-		PegParser * direct_rec_parser = make_peg_parser();
-		ParsedString * r = NULL;
-
-		print_named_peg_rule(x);
-		print_named_peg_rule(one);
-
-		push_back_peg_parser(direct_rec_parser, x);
-		push_back_peg_parser(direct_rec_parser, one);
-
-//		ASSERT(peg_parse_string(direct_rec_parser, "")            ==NULL, "don't match!\n");
-
-		r = peg_parse_string(direct_rec_parser, "1");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(direct_rec_parser, "1+1");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(direct_rec_parser, "1+1+1");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		r = peg_parse_string(direct_rec_parser, "1+1+1+1");
-		print_parsed_string(r);
-		free_parsed_string(r);
-
-		free_peg_parser(direct_rec_parser);
-	}
-	*/
-
-	printf("end\n");
-}
-
-int main (void) {
-	sample();
-	return 0;
-}
 
 
