@@ -658,10 +658,11 @@ void print_peg_rule_impl (PegRule const * pr, size_t depth) {
 				size_t const len=length_peg_rule_bin(iter);
 				if (1<len)
 					printf("(");
-				while (iter) {
-					print_peg_rule_impl(iter->ref, depth+1);
+				if (iter)
+					print_peg_rule_impl(iter->ref, depth+1);    // display 'sep' between rules
+				for (iter=iter->next; iter; iter=iter->next) {  //
 					printf(" / ");
-					iter = iter->next;
+					print_peg_rule_impl(iter->ref, depth+1);    // ref0 sep1 ref1 sep2 ref2 ... sepN refN
 				}
 				if (1<len)
 					printf(")");
@@ -1060,12 +1061,12 @@ void print_parsed_string_bin_impl(char const * open
 								, char const * close
 								, size_t depth) 
 {
-	ParsedStringBin const * iter=psb;
+	ParsedStringBin const * iter=NULL;
 	printf("%s", open);
-	while (iter) {
-		print_parsed_string_impl(iter->ps, depth+1);
-		printf("%s", sep);
-		iter = iter->next;
+	for (iter=psb; iter; iter=iter->next) {
+		print_parsed_string_impl(iter->ps, depth);
+		puts("");
+//		printf("%s", sep);
 	}
 	printf("%s", close);
 }
@@ -1087,7 +1088,7 @@ void print_parsed_string_bin(PEG_KIND kind, ParsedStringBin const * psb, size_t 
 		case PEG_REPEAT:
 		case PEG_ANY:
 		case PEG_CLASS:
-			print_parsed_string_impl(psb->ps, depth);
+			print_parsed_string_impl(psb->ps, depth); puts("");
 			break;
 		default:
 			ASSERT(false, "invalid kind is specified\n");
@@ -1104,17 +1105,18 @@ void print_parsed_string_impl(ParsedString const * ps, size_t depth) {
 			print_peg_rule_impl(ps->rule, depth); puts("");
 
 			print_ntimes("\t", depth+1);
-				printf("==> %s\n", ps->mstr);
+				printf("==> [%s]\n", ps->mstr);
 
 			if (ps->nest)
 				print_parsed_string_bin(ps->rule->kind, ps->nest, depth+1);
 
 		print_ntimes("\t", depth);
-			printf(") : %s\n", ps->ident ? ps->ident : "");
+			printf(") : %s", ps->ident ? ps->ident : "");
 	}
 }
 void print_parsed_string(ParsedString const * ps) {
 	print_parsed_string_impl(ps, 0);
+	puts("");
 }
 
 
