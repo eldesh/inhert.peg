@@ -482,29 +482,6 @@ void free_peg_parser(PegParser * p) {
 	}
 }
 
-static PegRule const * next_rule(PegRule const * x) {
-	if (!x)
-		return NULL;
-	switch (x->kind) {
-		case PEG_IDENT:
-		case PEG_PATTERN:
-			return NULL;
-		case PEG_NEGATIVE:
-		case PEG_AND:
-		case PEG_SEQ:
-		case PEG_EXISTS:
-		case PEG_PLUS:
-		case PEG_REPEAT:
-		case PEG_ANY:
-		case PEG_CLASS:
-		case PEG_CHOICE:
-			return x->body.ref;
-		default:
-			WARN("unkown peg rule is specified\n");
-			return NULL;
-	}
-}
-
 void print_peg_rule_impl (PegRule const * pr, size_t depth) {
 	if (pr) {
 		switch (pr->kind) {
