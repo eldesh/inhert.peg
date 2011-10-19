@@ -779,14 +779,13 @@ ParsedString * peg_parse_string_ident(PegParser const * rs, PegRule const * r, c
 	if (table.size) {
 		size_t idx = index_of_ident(rs, r->body.str);
 		if (!table.rs[0])
-			 table.rs[0] = make_row_cache_table(rs); // construct table for current positio of input string
+			 table.rs[0] = make_row_cache_table(rs); // construct table for current position of input string
 //		printf(" ident(%s) <- %s\n", r->body.str, str); print_peg_cache_table(&table);
 		if (!table.rs[0]->es[idx]->result_tree) {
 			 ParsedString * rn = peg_parse_string_impl(rs, r_->rule, str, table);
 			 if (rn) {
-				 rn->ident = strdup(r->body.str);
-				 table.rs[0]->es[idx]->result_tree = rn; // store to the cache table
-					 //= make_parsed_string(r->body.str, r, strlen(rn->mstr), rn->mstr, make_parsed_string_bin(rn,NULL));
+				 table.rs[0]->es[idx]->result_tree // store to the cache table
+					 = make_parsed_string(r->body.str, r, strlen(rn->mstr), rn->mstr, make_parsed_string_bin(rn,NULL));
 			 }
 		}
 //		printf(" ident(%s) <- %s\n", r->body.str, str); print_peg_cache_table(&table);
