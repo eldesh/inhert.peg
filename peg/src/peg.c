@@ -46,11 +46,11 @@
  *     Principles of programming languages
  *
  ***************************************************************************** ****/
+
 /**
  * compile :
  * 	> gcc -g -Wall -I peg/include -o libpeg.o -c peg/src/peg.c
  */
-
 // ignore warnings
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_NONSTDC_NO_DEPRECATE
