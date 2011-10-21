@@ -119,6 +119,13 @@ void free_peg_cache_table(PegCacheTable * table);
 	void free_row_cache_table(row_cache_table * rs);
 	void free_cache_elem(cache_elem * e);
 
+//// comparator
+bool equal_string (char const * lhs, char const * rhs); // compare NULL as an address of pointer, different from strcmp(3)
+bool equal_peg_rule    (PegRule      const * lhs, PegRule      const * rhs);
+bool equal_peg_rule_bin(peg_rule_bin const * lhs, peg_rule_bin const * rhs);
+bool equal_parsed_string    (ParsedString    const * lhs, ParsedString    const * rhs);
+bool equal_parsed_string_bin(ParsedStringBin const * lhs, ParsedStringBin const * rhs);
+
 //// parser for each PEG rule
 //
 // parse the given string with each PEG rule.
@@ -1066,5 +1073,74 @@ PegRule * peg_alphadigit (void) {
 			cons_peg_rule(peg_digit   (), NULL)));
 }
 
+bool equal_string (char const * lhs, char const * rhs) {
+	if ((!lhs && !rhs) || (lhs==rhs))
+		return true;
+	if ((lhs && !rhs) || (!lhs && rhs))
+		return false;
+	return !strcmp(lhs, rhs);
+}
 
+bool equal_peg_rule(PegRule const * lhs, PegRule const * rhs) {
+	if ((!lhs && !rhs) || (lhs==rhs))
+		return true;
+	if ((lhs && !rhs) || (!lhs && rhs))
+		return false;
+	if (lhs->kind != rhs->kind)
+		return false;
+
+	switch (lhs->kind) {
+		case PEG_NEGATIVE:
+		case PEG_AND     :
+		case PEG_EXISTS  :
+		case PEG_PLUS    :
+		case PEG_REPEAT  :
+			return equal_peg_rule(lhs->body.ref, rhs->body.ref);
+		case PEG_ANY     :
+			return lhs->body.ref == rhs->body.ref;
+		case PEG_CHOICE  :
+		case PEG_SEQ     :
+			return equal_peg_rule_bin(lhs->body.refs, rhs->body.refs);
+		case PEG_CLASS   :
+			NOTIMPL;
+			break;
+		case PEG_IDENT   :
+		case PEG_PATTERN :
+			return !strcmp(lhs->body.str, rhs->body.str);
+		default:
+			WARN("unkown PEG rule is specified (%d)\n", lhs->kind);
+	}
+	return false;
+}
+
+bool equal_peg_rule_bin(peg_rule_bin const * lhs, peg_rule_bin const * rhs) {
+	if ((!lhs && !rhs) || (lhs==rhs))
+		return true;
+	if ((lhs && !rhs) || (!lhs && rhs))
+		return false;
+	return equal_peg_rule(lhs->ref, rhs->ref)
+		&& equal_peg_rule_bin(lhs->next, rhs->next);
+}
+
+bool equal_parsed_string(ParsedString const * lhs, ParsedString const * rhs) {
+	if ((!lhs && !rhs) || (lhs==rhs))
+		return true;
+	if ((lhs && !rhs) || (!lhs && rhs))
+		return false;
+
+	return equal_string(lhs->ident, rhs->ident)
+		&& equal_peg_rule(lhs->rule, rhs->rule)
+		&& equal_string(lhs->mstr, rhs->mstr)
+		&& equal_parsed_string_bin(lhs->nest, rhs->nest);
+}
+
+bool equal_parsed_string_bin(ParsedStringBin const * lhs, ParsedStringBin const * rhs) {
+	if ((!lhs && !rhs) || (lhs==rhs))
+		return true;
+	if ((lhs && !rhs) || (!lhs && rhs))
+		return false;
+
+	return equal_parsed_string    (lhs->ps  , rhs->ps)
+		&& equal_parsed_string_bin(lhs->next, rhs->next);
+}
 

@@ -205,6 +205,12 @@ void free_parsed_string(ParsedString    * ps);
 void free_peg_parser(PegParser * p);
 void free_peg_rule(PegRule * pr);
 
+// comparator
+bool equal_peg_rule    (PegRule      const * lhs, PegRule      const * rhs);
+bool equal_peg_rule_bin(peg_rule_bin const * lhs, peg_rule_bin const * rhs);
+bool equal_parsed_string    (ParsedString    const * lhs, ParsedString    const * rhs);
+bool equal_parsed_string_bin(ParsedStringBin const * lhs, ParsedStringBin const * rhs);
+
 // register a rule to a set of parsers
 bool push_back_peg_parser(PegParser * p, NamedPegRule * npr);
 
