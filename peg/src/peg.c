@@ -102,6 +102,7 @@ void FREE_LOG(char const * file, int line, char const * func, void * p) {
 PegRule      * make_peg_rule(PEG_KIND kind, void * body);
 peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, ParsedStringBin * nest);
+ParsedStringBin * make_parsed_string_bin (ParsedString * ps, ParsedStringBin * next);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
 row_cache_table * make_row_cache_table(PegParser const * rs);
@@ -883,16 +884,15 @@ ParsedString * dup_parsed_string(ParsedString const * ps) {
 }
 
 ParsedString * peg_parse_string(PegParser const * pegs, char const * str) {
-	PegCacheTable * table  = NULL;
-	ParsedString  * result = NULL;
-	PegRule * start_rule = make_peg_rule(PEG_IDENT, pegs->nps[0]->name); // for start parsing from IDENT rule
-	ASSERT(pegs && (0<pegs->size), "parse execute without rules :(\n");
-	table  = make_peg_cache_table(str);
-	result = dup_parsed_string(peg_parse_string_impl(pegs, start_rule, str, *table));
-	free_peg_rule(start_rule);
-//	printf("R root\n"); print_peg_cache_table(table);
-	free_peg_cache_table(table);
-	return result;
+	ASSERT(pegs && (0<pegs->size), "parse execute without rules :(\n"); {
+		PegCacheTable * table = make_peg_cache_table(str);
+		PegRule       * start_rule = make_peg_rule(PEG_IDENT, pegs->nps[0]->name);
+		ParsedString  * result = dup_parsed_string(peg_parse_string_impl(pegs, start_rule, str, *table));
+		//	printf("R root\n"); print_peg_cache_table(table);
+		free_peg_rule(start_rule);
+		free_peg_cache_table(table);
+		return result;
+	}
 }
 
 static void print_ntimes(char const * str, int n) {
