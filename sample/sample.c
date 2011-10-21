@@ -7,8 +7,57 @@
 #endif
 #include <inhert/peg.h>
 
+#define PP_STRINGIZE(s) PP_STRINGIZE_I(s)
+#define PP_STRINGIZE_I(s) #s
 
-void sample (void) {
+#define TEST_EQUAL(eq, lhs, rhs) TEST_EQUAL_I(eq, lhs, rhs)
+#define TEST_EQUAL_I(eq, lhs, rhs)                                                      \
+	(test_equal_impl(__FILE__, __LINE__, __func__                                       \
+					 , PP_STRINGIZE(eq) "(" PP_STRINGIZE(lhs) "," PP_STRINGIZE(rhs) ")" \
+					 , (eq), (lhs), (rhs)))
+
+typedef bool (*equal_ptr_t)(void const *, void const *);
+
+char const * bool_to_string(bool b) {
+	char const * ss[] = { "false", "true" };
+	return ss[b];
+}
+
+bool test_equal_impl(char const * file, int line, char const * func, char const * expr
+					, equal_ptr_t eq, void const * lhs, void const * rhs)
+{
+	bool r = eq(lhs, rhs);
+	if (!r)
+		fprintf(stderr, "%10s:%5d [%-20s] > <%s>=[%s]\n", file, line, func, bool_to_string(r), expr);
+	return r;
+}
+
+void check_result (void) {
+	{
+		PegRule * rule = make_peg_rule(PEG_PATTERN, "a");
+		NamedPegRule * a = make_named_peg_rule("rule_a", rule);
+		PegParser * parser = make_peg_parser();
+		PegRule * start_rule = make_peg_rule(PEG_IDENT, "rule_a");
+		ParsedString * result = NULL;
+		ParsedString * expect = NULL;
+		push_back_peg_parser(parser, a);
+
+		result = peg_parse_string(parser, "a");
+		expect = make_parsed_string("rule_a", start_rule, 1, "a"
+					, make_parsed_string_bin(make_parsed_string(NULL, rule, 1, "a", NULL), NULL));
+
+//		print_parsed_string(result);
+//		print_parsed_string(expect);
+		TEST_EQUAL((equal_ptr_t)equal_parsed_string, result, expect);
+		
+		free_peg_rule(start_rule);
+		free_peg_parser(parser);
+		free_parsed_string(result);
+		free_parsed_string(expect);
+	}
+}
+
+void parsing_sample (void) {
 	{
 		PegRule * fact = make_peg_rule(PEG_IDENT, "fact");
 		PegRule * seq  = make_peg_rule(PEG_SEQ, NULL);
@@ -341,7 +390,8 @@ void sample (void) {
 }
 
 int main (void) {
-	sample();
+	parsing_sample();
+	check_result();
 #if defined(_WIN32) && defined(_DEBUG)
 	if (_CrtDumpMemoryLeaks())
 		printf("Memory Leaks is found :(\n");

@@ -199,6 +199,8 @@ PegRule      * make_peg_rule(PEG_KIND kind, void * body);
 peg_rule_bin * make_peg_rule_bin (PegRule * ref, peg_rule_bin * next);
 NamedPegRule * make_named_peg_rule(char const * name, PegRule * rule);
 PegParser * make_peg_parser(void);
+ParsedString * make_parsed_string (char const * ident, PegRule const * rule, size_t len, char const * str, ParsedStringBin * nest);
+ParsedStringBin * make_parsed_string_bin (ParsedString * ps, ParsedStringBin * next);
 
 // dtor
 void free_parsed_string(ParsedString    * ps);
