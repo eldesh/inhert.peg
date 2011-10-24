@@ -216,7 +216,7 @@ void err_printf_row(char const * format, ...) {
 void err_printf(char const * file, int line, char const * func, char const * format, ...)
 {
 	va_list ap;
-	fprintf(stderr, "%10s:%5d [%-20s] > ", __FILE__, __LINE__, __func__);
+	fprintf(stderr, "%10s:%5d [%-20s] > ", file, line, func);
 	va_start(ap, format);
 	vfprintf(stderr, format, ap);
 	va_end(ap);
